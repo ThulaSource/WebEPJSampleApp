@@ -73,6 +73,8 @@ namespace WebEpj
                 ForwardedHeaders = ForwardedHeaders.XForwardedProto
             });
 
+            app.UseDeveloperExceptionPage();
+
             app.UseStaticFiles();
             app.UseAuthentication();
 
