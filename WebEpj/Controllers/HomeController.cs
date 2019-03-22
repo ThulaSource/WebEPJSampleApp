@@ -1,13 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
+using System;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web;
 using WebEpj.Models;
 
 namespace WebEpj.Controllers
@@ -16,80 +21,94 @@ namespace WebEpj.Controllers
     public class HomeController : Controller
     {
         private readonly IConfiguration configuration;
-        private readonly IMemoryCache cache;
-
-        public string EnvironmentUrl { get; set; }
-
+        
         public HomeController(IConfiguration configuration, IMemoryCache cache)
         {
             this.configuration = configuration;
-            this.cache = cache;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
-            var model = new HomeModel
+            var accessToken = await HttpContext.GetTokenAsync("access_token");
+            return View(new HomeModel { SfmClientUrl = await GetSfmClientUrl(accessToken) });
+        }
+
+        private string ReadTestFile()
+        {
+            string res = string.Empty;
+
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = "WebEpj.TestStartPasient.xml";
+
+            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            using (var reader = new StreamReader(stream))
             {
-                Environments = GetAvailableEnvironments()
+                res = reader.ReadToEnd();
+            }
+
+            return res;
+        }
+
+        private async Task<string> GetSfmClientUrl(string accessToken)
+        {
+            var sfmClientUrl = "";
+            var sfmApiEndpoint = "";
+
+            var httpHandler = new HttpClientHandler()
+            {
+                // Prevent 302 redirection
+                AllowAutoRedirect = false
             };
 
-            // Available patients
-            var client = new HttpClient
+            // Connect to SFM.Router to get client and api endpoints for this user/installation
+            using (var httpClient = new HttpClient(httpHandler))
             {
-                BaseAddress = new Uri(configuration.AppSettings("ApiEndpoint"))
-            };
+                httpClient.SetBearerToken(accessToken);
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                var response = await httpClient.GetAsync(configuration.AppSettings("SfmRouterEndpoint"));
 
-            var accessToken = HttpContext.GetTokenAsync("access_token").GetAwaiter().GetResult();
-            client.SetBearerToken(accessToken);
+                if (!response.StatusCode.Equals(HttpStatusCode.Found))
+                {
+                    throw new ApplicationException($"Error communicating with SFM Router: {response.ReasonPhrase}");
+                }
 
-            var response = client.GetAsync("api/patients/");
-
-            var result = response.GetAwaiter().GetResult();
-            var responseAsJson = result.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-
-            var patientList = JsonConvert.DeserializeObject<List<SimplePatient>>(responseAsJson);
-
-            var availablePatients = new List<SelectListItem>();
-            foreach (var item in patientList)
-            {
-                availablePatients.Add(new SelectListItem { Text = item.FullNameAndFNR, Value = item.Ticket });
+                var clientAndApiEnpoint = new Uri(response.Headers.Location.ToString());
+                sfmApiEndpoint = HttpUtility.ParseQueryString(clientAndApiEnpoint.Query).Get("api_endpoint");
+                sfmClientUrl = clientAndApiEnpoint.GetLeftPart(UriPartial.Authority);
             }
 
-            model.Patients = availablePatients;
-
-            return View(model);
-        }
-
-        [HttpPost]
-        public IActionResult Redirect(HomeModel model)
-        {
-            var accessToken = HttpContext.GetTokenAsync("access_token").GetAwaiter().GetResult();
-            var idToken = HttpContext.GetTokenAsync("id_token").GetAwaiter().GetResult();
-            
-            var url = $"{model.SelectedEnvironment}/pages/set-context?patientTicket={model.SelectedTicket}#access_token={accessToken}&id_token={idToken}";
-            return Redirect(url);
-        }
-
-        private List<SelectListItem> GetAvailableEnvironments()
-        {
-            cache.TryGetValue("AvailableEnvs", out List<string> availableEnvironments);
-
-            if (availableEnvironments == null)
+            if (!sfmClientUrl.EndsWith("/"))
             {
-                availableEnvironments = new List<string>(configuration.AppSettingsArray("AvailableHosts"));
-                availableEnvironments.Sort();
-
-                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(30));
-                cache.Set("AvailableEnvs", availableEnvironments, cacheEntryOptions);
+                sfmClientUrl += "/";
             }
 
-            var envs = new List<SelectListItem>();
-            foreach (var item in availableEnvironments)
+            if (!sfmApiEndpoint.EndsWith("/"))
             {
-                envs.Add(new SelectListItem { Text = item, Value = item });
+                sfmApiEndpoint += "/";
             }
 
-            return envs;
+            // Connect to SFM Epj API to store/update patient and get ticket
+            var sfmApiEndpointMethod = $"{sfmApiEndpoint}api/Epj/StartPasient";
+
+            httpHandler = new HttpClientHandler() { AllowAutoRedirect = false };
+            using (var httpClient = new HttpClient(httpHandler))
+            {
+                using (var stringContent = new StringContent(ReadTestFile(), Encoding.UTF8, "application/xml"))
+                {
+                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
+                    var response = await httpClient.PostAsync(sfmApiEndpointMethod, stringContent);
+
+                    if (response.StatusCode == HttpStatusCode.Found)
+                    {
+                        // Construct client entry point with the result from start pasient call
+                        response.Headers.TryGetValues("ClientUrl", out var url);
+                        sfmClientUrl += url.First() + $"&api_endpoint={sfmApiEndpoint}";
+                    }
+                }
+            }
+
+            return $"{sfmClientUrl}#access_token={accessToken}";
         }
     }
 }
