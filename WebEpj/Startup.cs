@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using HelseId.Common.Clients;
+using HelseId.Common.Jwt;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -7,6 +9,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using System;
 
 namespace WebEpj
 {
@@ -46,20 +50,54 @@ namespace WebEpj
                 options.SignInScheme = "Cookies";
                 options.Authority = Configuration.AppSettings(Constants.AuthEndpointKey);
                 options.ClientId = Configuration.AppSettings(Constants.AuthClientIdKey);
-                options.ResponseType = "id_token token";
+                options.ResponseType = "code";
 
                 var scopes = Configuration.AppSettingsArray(Constants.AuthScopesKey);
+                var scopeString = string.Empty; 
                 foreach (var item in scopes)
                 {
                     options.Scope.Add(item);
+                    scopeString += $"{item} ";
                 }
 
                 options.SignedOutRedirectUri = Configuration.AppSettings(Constants.AuthSignedOutRedirectUriKey);
-                options.AuthenticationMethod = OpenIdConnectRedirectBehavior.FormPost;
                 options.GetClaimsFromUserInfoEndpoint = true;
                 options.SaveTokens = true;
                 options.UseTokenLifetime = true;
                 options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters { ValidateLifetime = true };
+                options.Events = new OpenIdConnectEvents
+                {
+                    OnAuthorizationCodeReceived = async ctx =>
+                    {
+                        var opt = new HelseIdClientOptions
+                        {
+                            ClientId = Configuration.AppSettings(Constants.AuthClientIdKey),
+                            Authority = Configuration.AppSettings(Constants.AuthEndpointKey),
+                            RedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc",
+                            SigningMethod = (JwtGenerator.SigningMethod)Enum.Parse(typeof(JwtGenerator.SigningMethod), "2"),
+                            Scope = scopeString.TrimEnd(),
+                            Flow = IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid,
+                        };
+
+                        var client = new HelseIdClient(opt);
+
+                        var result = await client.AcquireTokenByAuthorizationCodeAsync(ctx.ProtocolMessage.Code);
+
+                        if (result.IsError)
+                        {
+                            throw new ApplicationException(result.Error);
+                        }
+
+                        var response = new OpenIdConnectMessage
+                        {
+                            AccessToken = result.AccessToken,
+                            IdToken = result.IdentityToken,
+                            RefreshToken = result.RefreshToken
+                        };
+
+                        ctx.HandleCodeRedemption(response);
+                    }
+                };
             });
         }
 
@@ -76,6 +114,7 @@ namespace WebEpj
             app.UseDeveloperExceptionPage();
 
             app.UseStaticFiles();
+
             app.UseAuthentication();
 
             app.UseMvc(routes =>
