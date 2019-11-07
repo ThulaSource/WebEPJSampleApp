@@ -3,6 +3,7 @@ using HelseId.Common.Crypto;
 using HelseId.Common.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
+using System.Reflection;
 
 namespace HelseId.Common.Oidc
 {
@@ -10,7 +11,11 @@ namespace HelseId.Common.Oidc
     {
         public static ClientAssertion CreateWithRsaKeys(string clientId, string tokenEndpointUrl)
         {
-            var rsa = RSAKeyGenerator.GetRsa();
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = "RSAPRIVATEKEYRESOURCE";
+            var key = assembly.GetManifestResourceStream(resourceName);
+
+            var rsa = RSAKeyGenerator.GetRsaParameters(key);
             var securityKey = new RsaSecurityKey(rsa);
             var assertion = JwtGenerator.Generate(clientId, tokenEndpointUrl, JwtGenerator.SigningMethod.RsaSecurityKey, securityKey, SecurityAlgorithms.RsaSha512);
 

@@ -1,18 +1,15 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using System;
-using System.IO;
-using System.Linq;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 using WebEpj.Models;
 
 namespace WebEpj.Controllers
@@ -33,82 +30,65 @@ namespace WebEpj.Controllers
             return View(new HomeModel { SfmClientUrl = await GetSfmClientUrl(accessToken) });
         }
 
-        private string ReadTestFile()
-        {
-            string res = string.Empty;
-
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = "WebEpj.TestStartPasient.xml";
-
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
-            using (var reader = new StreamReader(stream))
-            {
-                res = reader.ReadToEnd();
-            }
-
-            return res;
-        }
 
         private async Task<string> GetSfmClientUrl(string accessToken)
         {
+            // CONTACT FHIR API TO FETCH A NEW PATIENT TICKET FOR THE PATIENT
+            // USING PATIENT WITH FNR: 09099512064 AS AN EXAMPLE
             var sfmClientUrl = "";
-            var sfmApiEndpoint = "";
+            var patientTicket = "";
 
-            var httpHandler = new HttpClientHandler()
-            {
-                // Prevent 302 redirection
-                AllowAutoRedirect = false
-            };
-
-            // Connect to SFM.Router to get client and api endpoints for this user/installation
-            using (var httpClient = new HttpClient(httpHandler))
+            using (var httpClient = new HttpClient())
             {
                 httpClient.SetBearerToken(accessToken);
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                var response = await httpClient.GetAsync(configuration.AppSettings("SfmRouterEndpoint"));
 
-                if (!response.StatusCode.Equals(HttpStatusCode.Found))
+                var patientFnr = "09099512064";
+                var ticketEndpoint = $"{configuration.AppSettings("SfmFhirApiEndpoint")}fhir/PatientTickets/{patientFnr}";
+                
+                var response = await httpClient.GetAsync(ticketEndpoint);
+
+                if (response.StatusCode.Equals(HttpStatusCode.NotFound))
+                {
+                    // PATIENT DOES NOT EXIST. POST TO /FHIR/PATIENTS TO CREATE A NEW PATIENT OR PUT TO /FHIR/PATIENTS/{PATIENTTICKET} TO UPDATE AN EXISTING ONE
+                    throw new ApplicationException("Patient not found when fetching ticket from SFM Fhir API");
+                }
+
+                if (!response.StatusCode.Equals(HttpStatusCode.OK))
+                {
+                    throw new ApplicationException($"Error communicating with SFM Fhir API: {response.ReasonPhrase}");
+                }
+
+                patientTicket = await response.Content.ReadAsAsync<string>();
+            }
+
+            // Construct router url along with parameters
+            var queryParams = new Dictionary<string, string>();
+
+            queryParams.Add("patientTicket", patientTicket);
+            queryParams.Add("show-cave", "true");
+
+            // Uncomment to send on behalf of parameter
+            //queryParams.Add("onBehalfOf", "USER HPRID");
+
+            var routerEndpoint = QueryHelpers.AddQueryString(configuration.AppSettings("SfmRouterEndpoint"), queryParams);
+
+            // CONNECT TO SFM.ROUTER TO GET CLIENT ENDPOINT
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.SetBearerToken(accessToken);
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                var response = await httpClient.GetAsync(routerEndpoint);
+
+                if (!response.StatusCode.Equals(HttpStatusCode.OK))
                 {
                     throw new ApplicationException($"Error communicating with SFM Router: {response.ReasonPhrase}");
                 }
 
-                var clientAndApiEnpoint = new Uri(response.Headers.Location.ToString());
-                sfmApiEndpoint = HttpUtility.ParseQueryString(clientAndApiEnpoint.Query).Get("api_endpoint");
-                sfmClientUrl = clientAndApiEnpoint.GetLeftPart(UriPartial.Authority);
+                sfmClientUrl = await response.Content.ReadAsStringAsync();
             }
 
-            if (!sfmClientUrl.EndsWith("/"))
-            {
-                sfmClientUrl += "/";
-            }
-
-            if (!sfmApiEndpoint.EndsWith("/"))
-            {
-                sfmApiEndpoint += "/";
-            }
-
-            // Connect to SFM Epj API to store/update patient and get ticket
-            var sfmApiEndpointMethod = $"{sfmApiEndpoint}api/Epj/StartPasient";
-
-            httpHandler = new HttpClientHandler() { AllowAutoRedirect = false };
-            using (var httpClient = new HttpClient(httpHandler))
-            {
-                using (var stringContent = new StringContent(ReadTestFile(), Encoding.UTF8, "application/xml"))
-                {
-                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
-                    var response = await httpClient.PostAsync(sfmApiEndpointMethod, stringContent);
-
-                    if (response.StatusCode == HttpStatusCode.Found)
-                    {
-                        // Construct client entry point with the result from start pasient call
-                        response.Headers.TryGetValues("ClientUrl", out var url);
-                        sfmClientUrl += url.First() + $"&api_endpoint={sfmApiEndpoint}";
-                    }
-                }
-            }
-
-            return $"{sfmClientUrl}#access_token={accessToken}";
+            return sfmClientUrl;
         }
     }
 }

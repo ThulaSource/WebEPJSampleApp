@@ -7,14 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="TestStartPasient.xml" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="TestStartPasient.xml" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="IdentityModel" Version="3.10.1" />
     <PackageReference Include="KubernetesClient" Version="1.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
