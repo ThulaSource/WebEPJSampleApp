@@ -11,9 +11,8 @@ namespace HelseId.Common.Oidc
     {
         public static ClientAssertion CreateWithRsaKeys(string clientId, string tokenEndpointUrl)
         {
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = "RSAPRIVATEKEYRESOURCE";
-            var key = assembly.GetManifestResourceStream(resourceName);
+            var assembly = Assembly.GetEntryAssembly();
+            var key = assembly.GetManifestResourceStream("WebEpj.HelseIdClientRsaPrivateKey.pem");
 
             var rsa = RSAKeyGenerator.GetRsaParameters(key);
             var securityKey = new RsaSecurityKey(rsa);

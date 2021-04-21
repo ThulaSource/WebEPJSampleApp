@@ -1,7 +1,17 @@
 # WebEPJ Sample App
 
-This is a sample app on how to setup an ASP.Net Core MVC application with integration with the SFM Angular client.
+This application samples the integration between an ASP.Net Core MVC application (WebEpj) and the SFM Angular client application.
 
-An example of setting up OpenId authentication using HelseId as the identity provider is provided. 
+Sampled functionalities:
 
-A sample on how to supply access and id JWT to the SFM angular client is also provided.
+- OpenId Authentication using HelseId.
+- Creating a new SFM Session (see HomeController.Index())
+- Renewing a SFM Session token to keep the session alive (see HomeController.RefreshTokenAsync() and OnValidatePrincipal CookieAuthenticationEvents event)
+- Request a patient ticket from SFM (see HomeController.LoadTicketAsync)
+- Start, login and load a patient using SFM client (see javascript functions under Index.cshtml)
+
+What needsrto be configured:
+- appSettings:Authentication -> HelseId related settings
+- appSettings:SfmSessionGatewayEndpoint -> The SFM session gateway endpoint
+- HelseIdClientRsaPrivateKey.pem file -> This is the HelseId Client private key
+ 

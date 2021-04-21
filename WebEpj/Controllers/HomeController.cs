@@ -1,15 +1,14 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using System;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
+using System.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using WebEpj.Models;
 
 namespace WebEpj.Controllers
@@ -17,78 +16,101 @@ namespace WebEpj.Controllers
     [Authorize]
     public class HomeController : Controller
     {
-        private readonly IConfiguration configuration;
+        private readonly ApplicationOptions applicationOptions;
+        private readonly AuthenticationOptions authenticationOptions;
+        private readonly HttpClient httpClient;
+        private readonly IHttpContextAccessor httpContextAccessor;
         
-        public HomeController(IConfiguration configuration, IMemoryCache cache)
+        public HomeController(IOptions<ApplicationOptions> appOptions,
+            IOptions<AuthenticationOptions> authOptions,
+            IHttpClientFactory httpClientFactory,
+            IHttpContextAccessor httpContextAccessor)
         {
-            this.configuration = configuration;
+            applicationOptions = appOptions.Value;
+            authenticationOptions = authOptions.Value;
+            httpClient = httpClientFactory.CreateClient();
+            this.httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<IActionResult> Index()
         {
-            var accessToken = await HttpContext.GetTokenAsync("access_token");
-            return View(new HomeModel { SfmClientUrl = await GetSfmClientUrl(accessToken) });
+            var accessToken = await httpContextAccessor.HttpContext.GetTokenAsync("access_token");
+            httpClient.SetBearerToken(accessToken);
+            httpClient.BaseAddress = new Uri(applicationOptions.SfmSessionGatewayEndpoint);
+            
+            // Create new SFM Session
+            var nonceValues = NonceHelper.CreateNonce();
+            var content = new StringContent(JsonConvert.SerializeObject(new { nonce = nonceValues.nonceHashBase64 }), Encoding.UTF8, "application/json");
+            
+            var response = await httpClient.PostAsync("/api/Session/create", content);
+            response.EnsureSuccessStatusCode();
+
+            var responseAsJson = await response.Content.ReadAsStringAsync();
+            var sessionInfo = JsonConvert.DeserializeObject<SessionResult>(responseAsJson);
+
+            var model = new HomeModel
+            {
+                SessionNonce = HttpUtility.UrlEncode(nonceValues.nonceBase64),
+                SessionCode = HttpUtility.UrlEncode(sessionInfo.Code),
+                ApiUrl = sessionInfo.ApiAddress,
+                ClientUrl = sessionInfo.ClientAddress
+            };
+
+            return View(nameof(Index), model);
         }
-
-
-        private async Task<string> GetSfmClientUrl(string accessToken)
+        
+        [HttpGet]
+        [Route("Home/loadTicketAsync")]
+        public async Task<IActionResult> LoadTicketAsync([FromQuery] string patientIdentifier)
         {
-            // CONTACT FHIR API TO FETCH A NEW PATIENT TICKET FOR THE PATIENT
-            // USING PATIENT WITH FNR: 09099512064 AS AN EXAMPLE
-            var sfmClientUrl = "";
-            var patientTicket = "";
+            var accessToken = await httpContextAccessor.HttpContext.GetTokenAsync("access_token");
+            httpClient.SetBearerToken(accessToken);
+            httpClient.BaseAddress = new Uri(applicationOptions.SfmSessionGatewayEndpoint);
 
-            using (var httpClient = new HttpClient())
-            {
-                httpClient.SetBearerToken(accessToken);
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-                var patientFnr = "09099512064";
-                var ticketEndpoint = $"{configuration.AppSettings("SfmFhirApiEndpoint")}fhir/PatientTickets/{patientFnr}";
+            var content = new StringContent(JsonConvert.SerializeObject(new { patientPid =  patientIdentifier }), Encoding.UTF8, "application/json");
                 
-                var response = await httpClient.GetAsync(ticketEndpoint);
+            var response = await httpClient.PostAsync("/api/PatientTicket", content);
+            response.EnsureSuccessStatusCode();
 
-                if (response.StatusCode.Equals(HttpStatusCode.NotFound))
-                {
-                    // PATIENT DOES NOT EXIST. POST TO /FHIR/PATIENTS TO CREATE A NEW PATIENT OR PUT TO /FHIR/PATIENTS/{PATIENTTICKET} TO UPDATE AN EXISTING ONE
-                    throw new ApplicationException("Patient not found when fetching ticket from SFM Fhir API");
-                }
-
-                if (!response.StatusCode.Equals(HttpStatusCode.OK))
-                {
-                    throw new ApplicationException($"Error communicating with SFM Fhir API: {response.ReasonPhrase}");
-                }
-
-                patientTicket = await response.Content.ReadAsAsync<string>();
-            }
-
-            // Construct router url along with parameters
-            var queryParams = new Dictionary<string, string>();
-
-            queryParams.Add("patientTicket", patientTicket);
-            queryParams.Add("show-cave", "true");
-
-            // Uncomment to send on behalf of parameter
-            //queryParams.Add("onBehalfOf", "USER HPRID");
-
-            var routerEndpoint = QueryHelpers.AddQueryString(configuration.AppSettings("SfmRouterEndpoint"), queryParams);
-
-            // CONNECT TO SFM.ROUTER TO GET CLIENT ENDPOINT
-            using (var httpClient = new HttpClient())
+            var responseAsJson = await response.Content.ReadAsStringAsync();
+            return Ok(JsonConvert.DeserializeObject<string>(responseAsJson));
+        }
+        
+        [HttpGet]
+        [Route("Home/refreshTokenAsync")]
+        public async Task<IActionResult> RefreshTokenAsync()
+        {
+            // Call session gateway to refresh session
+            if (httpContextAccessor.HttpContext.Items.ContainsKey("RenewSession") &&
+                bool.Parse(httpContextAccessor.HttpContext.Items["RenewSession"].ToString()))
             {
+                var accessToken = await httpContextAccessor.HttpContext.GetTokenAsync("access_token");
                 httpClient.SetBearerToken(accessToken);
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                var response = await httpClient.GetAsync(routerEndpoint);
-
-                if (!response.StatusCode.Equals(HttpStatusCode.OK))
-                {
-                    throw new ApplicationException($"Error communicating with SFM Router: {response.ReasonPhrase}");
-                }
-
-                sfmClientUrl = await response.Content.ReadAsStringAsync();
+                httpClient.BaseAddress = new Uri(applicationOptions.SfmSessionGatewayEndpoint);
+                
+                var response = await httpClient.PostAsync("/api/Session/refresh", null);
+                response.EnsureSuccessStatusCode();
             }
-
-            return sfmClientUrl;
+            
+            return Ok();
+        } 
+        
+        [HttpPost]
+        [Route("Home/endSessionAsync")]
+        public async Task<IActionResult> EndSessionAsync()
+        {
+            var accessToken = await httpContextAccessor.HttpContext.GetTokenAsync("access_token");
+            httpClient.SetBearerToken(accessToken);
+            httpClient.BaseAddress = new Uri(applicationOptions.SfmSessionGatewayEndpoint);
+                
+            var response = await httpClient.PostAsync("/api/Session/end", null);
+            response.EnsureSuccessStatusCode();
+            
+            await HttpContext.SignOutAsync("OpenIdConnect");
+            await HttpContext.SignOutAsync("Cookies");
+            
+            var idToken = await httpContextAccessor.HttpContext.GetTokenAsync("id_token");
+            return Redirect($"{authenticationOptions.Endpoint}/connect/endsession?id_token_hint={idToken}");
         }
     }
 }

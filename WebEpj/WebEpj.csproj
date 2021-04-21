@@ -1,20 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <DockerComposeProjectPath>..\docker-compose.dcproj</DockerComposeProjectPath>
     <UserSecretsId>28a95dc2-bc05-4eb4-bcc4-35f115524647</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="IdentityModel.OidcClient" Version="2.9.0" />
     <PackageReference Include="IdentityModel" Version="3.10.1" />
-    <PackageReference Include="KubernetesClient" Version="1.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.AspNetCore.Razor.Design" Version="2.1.2" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="3.1.10" />
+    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="2.1.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HelseId.Common\HelseId.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="HelseIdClientRsaPrivateKey.pem" />
+    <EmbeddedResource Include="HelseIdClientRsaPrivateKey.pem" />
   </ItemGroup>
 
 </Project>
