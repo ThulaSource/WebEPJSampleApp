@@ -9,7 +9,7 @@
     <PackageReference Include="IdentityModel" Version="3.6.1" />
     <PackageReference Include="IdentityModel.OidcClient" Version="2.6.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="System.Net.Http" Version="4.3.3" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
   </ItemGroup>
 
   <ItemGroup>
