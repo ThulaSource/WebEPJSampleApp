@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,12 +55,21 @@ namespace WebEpj.Controllers
                 SessionNonce = HttpUtility.UrlEncode(nonceValues.nonceBase64),
                 SessionCode = HttpUtility.UrlEncode(sessionInfo.Code),
                 ApiUrl = sessionInfo.ApiAddress,
-                ClientUrl = sessionInfo.ClientAddress
+                Portals = GetPortals(sessionInfo.Portals)
             };
 
             return View(nameof(Index), model);
         }
-        
+
+        private List<PortalModel> GetPortals(List<SessionPortal> sessionInfoPortals)
+        {
+            return sessionInfoPortals.Select(x => new PortalModel
+            {
+                Address = x.Address,
+                Name = x.PortalType.ToString()
+            }).ToList();
+        }
+
         [HttpGet]
         [Route("Home/loadTicketAsync")]
         public async Task<IActionResult> LoadTicketAsync([FromQuery] string patientIdentifier)

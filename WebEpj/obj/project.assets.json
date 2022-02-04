@@ -2054,7 +2054,7 @@
           "IdentityModel": "3.6.1",
           "IdentityModel.OidcClient": "2.6.0",
           "Newtonsoft.Json": "11.0.2",
-          "System.Net.Http": "4.3.3"
+          "System.Net.Http": "4.3.4"
         },
         "compile": {
           "bin/placeholder/HelseId.Models.dll": {}
@@ -6672,31 +6672,34 @@
     ]
   },
   "packageFolders": {
-    "/home/francisco/.nuget/packages/": {}
+    "C:\\Users\\ricar\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/francisco/Work/thula/sfm/WebEpjSampleApp/WebEPJSampleApp/WebEpj/WebEpj.csproj",
+      "projectUniqueName": "C:\\Code\\WebEPJSampleApp\\WebEpj\\WebEpj.csproj",
       "projectName": "WebEpj",
-      "projectPath": "/home/francisco/Work/thula/sfm/WebEpjSampleApp/WebEPJSampleApp/WebEpj/WebEpj.csproj",
-      "packagesPath": "/home/francisco/.nuget/packages/",
-      "outputPath": "/home/francisco/Work/thula/sfm/WebEpjSampleApp/WebEPJSampleApp/WebEpj/obj/",
+      "projectPath": "C:\\Code\\WebEPJSampleApp\\WebEpj\\WebEpj.csproj",
+      "packagesPath": "C:\\Users\\ricar\\.nuget\\packages\\",
+      "outputPath": "C:\\Code\\WebEPJSampleApp\\WebEpj\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/home/francisco/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\ricar\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "netcoreapp3.1"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "netcoreapp3.1": {
+          "targetAlias": "netcoreapp3.1",
           "projectReferences": {
-            "/home/francisco/Work/thula/sfm/WebEpjSampleApp/WebEPJSampleApp/HelseId.Common/HelseId.Common.csproj": {
-              "projectPath": "/home/francisco/Work/thula/sfm/WebEpjSampleApp/WebEPJSampleApp/HelseId.Common/HelseId.Common.csproj"
+            "C:\\Code\\WebEPJSampleApp\\HelseId.Common\\HelseId.Common.csproj": {
+              "projectPath": "C:\\Code\\WebEPJSampleApp\\HelseId.Common\\HelseId.Common.csproj"
             }
           }
         }
@@ -6709,6 +6712,7 @@
     },
     "frameworks": {
       "netcoreapp3.1": {
+        "targetAlias": "netcoreapp3.1",
         "dependencies": {
           "IdentityModel": {
             "target": "Package",
@@ -6737,20 +6741,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[3.1.8, 3.1.8]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Host.linux-x64",
-            "version": "[3.1.8, 3.1.8]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[3.1.0, 3.1.0]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.AspNetCore.App": {
             "privateAssets": "none"
@@ -6759,7 +6749,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/3.1.402/RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\6.0.101\\RuntimeIdentifierGraph.json"
       }
     }
   },
