@@ -55,19 +55,15 @@ namespace WebEpj.Controllers
                 SessionNonce = HttpUtility.UrlEncode(nonceValues.nonceBase64),
                 SessionCode = HttpUtility.UrlEncode(sessionInfo.Code),
                 ApiUrl = sessionInfo.ApiAddress,
-                Portals = GetPortals(sessionInfo.Portals)
+                Portals = GetPortals(sessionInfo.Metadata)
             };
 
             return View(nameof(Index), model);
         }
 
-        private List<PortalModel> GetPortals(List<SessionPortal> sessionInfoPortals)
+        private List<PortalModel> GetPortals(Dictionary<string, string> metadata)
         {
-            return sessionInfoPortals.Select(x => new PortalModel
-            {
-                Address = x.Address,
-                Name = x.PortalType.ToString()
-            }).ToList();
+            return metadata.Select(item => new PortalModel {Name = item.Key.ToUpper(), Address = item.Value}).ToList();
         }
 
         [HttpGet]

@@ -21,37 +21,8 @@ namespace WebEpj.Models
         public string ApiAddress { get; set; }
         
         /// <summary>
-        /// List of Portals to connect
+        /// Dictionary of Metadata to connect
         /// </summary>
-        public List<SessionPortal> Portals { get; set; }
-    }
-    
-    /// <summary>
-    /// Portal details
-    /// </summary>
-    public class SessionPortal
-    {
-        /// <summary>
-        /// Type of Portal
-        /// </summary>
-        public PortalType PortalType { get; set; }
-
-        /// <summary>
-        /// Address of Portal
-        /// </summary>
-        public string Address { get; set; }
-    }
-
-    public enum PortalType
-    {
-        [EnumMember(Value = @"PatientPortal")]
-        PatientPortal = 0,
-    
-        [EnumMember(Value = @"EnterprisePortal")]
-        EnterprisePortal = 1,
-    
-        [EnumMember(Value = @"HealthcarePortal")]
-        HealthcarePortal = 2,
-    
+        public Dictionary<string, string> Metadata { get; set; }
     }
 }

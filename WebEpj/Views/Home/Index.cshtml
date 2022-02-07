@@ -70,12 +70,14 @@
     }
     
     function openPortal(type, url) {
-        $("#navbarPortals").hide();
+        let navbarPortals = document.getElementById("navbarPortals");
+        navbarPortals.style.display = "none";
         
-        if (type === '@PortalType.PatientPortal.ToString()')
+        if (type === 'PATIENTPORTAL')
         {
             //only need to set patient on PatientPortal
-            $("#navbarOpenPatient").show();
+            let navbarOpenPatient = document.getElementById("navbarOpenPatient");
+            navbarOpenPatient.style.display = "";
         }
        
         let iframe = document.getElementById('sfmclientFrame');
