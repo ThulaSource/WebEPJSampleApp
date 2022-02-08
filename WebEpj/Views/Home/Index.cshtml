@@ -7,17 +7,26 @@
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <a class="navbar-brand" href="#">Web EPJ Emulator</a>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
-         <ul class="navbar-nav mr-auto"></ul>
-        <form class="form-inline my-2 my-lg-0" method="POST" asp-controller="Home" asp-action="EndSession">
-            <input id='patientIdentifier' class="form-control mr-sm-2" type="search" placeholder="Patient Identifier" aria-label="Patient">
-            <button class="btn btn-outline-primary my-2 my-sm-0" type="submit" name="submitButton" onclick="openPatient(); return false;">Open Patient</button>
-            <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit" name="logoutButton">Logout</button>
-        </form>
+        <ul class="navbar-nav ml-auto" >
+            <div id="navbarPortals">
+                @foreach (var item in @Model.Portals)
+                {
+                    <button class="btn btn-outline-primary my-2 my-sm-0 mr-2" type="submit" name="submitButton" onclick="openPortal('@item.Name', '@item.Address'); return false;">@item.Name</button>
+                }
+            </div>
+            <div id="navbarOpenPatient" style="display: none;">
+                <input id='patientIdentifier' class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Patient Identifier" aria-label="Patient">
+                <button class="btn btn-outline-primary my-2 my-sm-0 mr-2" type="submit" name="submitButton" onclick="openPatient(); return false;">Open Patient</button>
+            </div>
+            <form class="form-inline my-2 my-lg-0" method="POST" asp-controller="Home" asp-action="EndSession">
+                <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit" name="logoutButton">Logout</button>
+            </form>
+        </ul>
     </div>
 </nav>
 
-<div class="row">
-    <iframe id="sfmclientFrame" frameborder="1" width="100%" src="@Model.ClientUrl" style="height: calc(100vh - 32px);border: 0"></iframe>
+<div class="row" style="margin: 0;">
+    <iframe id="sfmclientFrame" frameborder="1" width="100%" style="height: calc(100vh - 62px);border: 0"></iframe>
 </div>
 
 
@@ -36,11 +45,10 @@
     // Known messages TO sfm Client:
     //
     // 1. 'action' = 'login' - Logs the user 
-    // 2. 'action' = 'setPatient' - Opens a patient
+    // 2. 'action' = 'setPatient' - Opens a patient (this only work with PatientPortal)
     
     function receiveMessage(event) {  
         console.debug('Received new message from sfm client');
-        
         if(event.data != undefined){
             if (event.data.login == 'success') {
                 console.debug('Received successful login reply message...');
@@ -59,6 +67,21 @@
                 iframe.contentWindow.postMessage(msg, '*');    
             }
         }
+    }
+    
+    function openPortal(type, url) {
+        let navbarPortals = document.getElementById("navbarPortals");
+        navbarPortals.style.display = "none";
+        
+        if (type === 'PATIENTPORTAL')
+        {
+            //only need to set patient on PatientPortal
+            let navbarOpenPatient = document.getElementById("navbarOpenPatient");
+            navbarOpenPatient.style.display = "";
+        }
+       
+        let iframe = document.getElementById('sfmclientFrame');
+        iframe.src = url;
     }
     
     function openPatient() {
