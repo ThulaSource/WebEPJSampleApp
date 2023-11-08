@@ -1,5 +1,16 @@
 # WebEPJ Sample App
 
+
+For support on this code see contact information here:
+
+https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492666/Kontaktinformasjon
+
+For more technical info on SFM integration:
+
+https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492688/SFM+Fullversjon
+
+
+
 This application samples the integration between an ASP.Net Core MVC application (WebEpj) and the SFM Angular client application.
 
 Sampled functionalities:
@@ -18,10 +29,4 @@ What needsrto be configured:
 
  
 
-For support on this code see contact information here:
 
-https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492666/Kontaktinformasjon
-
-For more technical info on SFM integration:
-
-https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492688/SFM+Fullversjon
