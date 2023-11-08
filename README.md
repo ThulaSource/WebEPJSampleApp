@@ -14,6 +14,8 @@ What needsrto be configured:
 - appSettings:Authentication -> HelseId related settings
 - appSettings:SfmSessionGatewayEndpoint -> The SFM session gateway endpoint
 - HelseIdClientRsaPrivateKey.pem file -> This is the HelseId Client private key
+
+
  
 
 For support on this code see contact information here:
