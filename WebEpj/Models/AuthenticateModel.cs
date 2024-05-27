@@ -2,7 +2,7 @@
 
 namespace WebEpj.Models
 {
-    public class HomeModel
+    public class AuthenticateModel
     {
         public string SessionNonce { get; set; }
         

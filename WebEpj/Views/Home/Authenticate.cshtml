@@ -1,0 +1,142 @@
+﻿@{
+    ViewData["Title"] = "Authenticated Page";
+}
+
+@model AuthenticateModel
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="#">Web EPJ Emulator</a>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav ml-auto" >
+            <div id="navbarPortals">
+                @foreach (var item in @Model.Portals)
+                {
+                    <button class="btn btn-outline-primary my-2 my-sm-0 mr-2" type="submit" name="submitButton" onclick="openPortal('@item.Name', '@item.Address'); return false;">@item.Name</button>
+                }
+            </div>
+            <div id="navbarOpenPatient" style="display: none;">
+                <input id='patientIdentifier' class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Patient Identifier" aria-label="Patient">
+                <button class="btn btn-outline-primary my-2 my-sm-0 mr-2" type="submit" name="submitButton" onclick="openPatient(); return false;">Open Patient</button>
+            </div>
+            <form class="form-inline my-2 my-lg-0" method="POST" asp-controller="Home" asp-action="EndSession">
+                <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit" name="logoutButton">Logout</button>
+            </form>
+        </ul>
+    </div>
+</nav>
+
+<div class="row" style="margin: 0;">
+    <iframe id="sfmclientFrame" frameborder="1" width="100%" style="height: calc(100vh - 62px);border: 0"></iframe>
+</div>
+
+
+<script type="text/javascript">     
+
+    // setup listener to receive messages from SFM Client
+    window.addEventListener("message", receiveMessage);
+ 
+    // Handles incoming messages from SFM Client
+    // Known messages FROM sfm Client:
+    //
+    // 1. clientLoaded - When the SFM client application is fully loaded and ready to receive messages
+    // 2. login - When the SFM client is able to redeem the one time code and logged in successfully
+    // 3. setPatient - When the client loads the patient successfully
+    //
+    // Known messages TO sfm Client:
+    //
+    // 1. 'action' = 'login' - Logs the user 
+    // 2. 'action' = 'setPatient' - Opens a patient (this only work with PatientPortal)
+    
+    function receiveMessage(event) {  
+        console.debug('Received new message from sfm client');
+        if(event.data != undefined){
+            if (event.data.login == 'success') {
+                console.debug('Received successful login reply message...');
+            }
+            else if (event.data.setPatient == 'success'){
+                console.debug('Received successful set patient post message...');
+            }
+            else if (event.data.clientLoaded == 'success'){
+                console.debug('Start sfm login on sfm client...');
+                let sessionCode = decodeURIComponent('@Model.SessionCode');
+                let sessionNonce = decodeURIComponent('@Model.SessionNonce');
+                let msg={
+                    'action': 'login', 
+                    'code' : sessionCode, 
+                    'nonce': sessionNonce, 
+                    'apiEndpoint': '@Model.ApiUrl'
+                };
+                
+                iframe = document.getElementById('sfmclientFrame');
+                console.debug('EPJ sending sfm login post message...');
+                iframe.contentWindow.postMessage(msg, '*');    
+            }
+        }
+    }
+    
+    function openPortal(type, url) {
+        let navbarPortals = document.getElementById("navbarPortals");
+        navbarPortals.style.display = "none";
+        
+        if (type === 'PATIENTPORTAL')
+        {
+            //only need to set patient on Patient Portal
+            let navbarOpenPatient = document.getElementById("navbarOpenPatient");
+            navbarOpenPatient.style.display = "";
+        }
+
+        if (type === 'DISPLAYPORTAL')
+        {
+            //only need to set patient on DISPLAY PORTAL
+            let navbarOpenPatient = document.getElementById("navbarOpenPatient");
+            navbarOpenPatient.style.display = "";
+        }
+       
+        let iframe = document.getElementById('sfmclientFrame');
+        iframe.src = url;
+    }
+    
+    function openPatient() {
+        let patientIdentifier = $("#patientIdentifier").val();
+        
+        console.debug('Getting valid ticket...');
+        
+        $.ajax({
+          url: "/Home/loadTicketAsync",
+          type: "GET",
+          data: { patientIdentifier: patientIdentifier },
+          traditional: true,
+          success: function (result) {
+              console.debug('Received ticket: ' + result);
+              
+              // Start patient call
+              let msg = {
+                    'action': 'setPatient',
+                    'ticket' : result,
+                    'showAllergies': 'true', // Set to false to Hide allergies from UI 
+                    'onBehalfOf': '' // Set an HprId if acting on behalf of another practitioner
+               };
+               
+              console.debug('Send setPatient post message...');
+               
+               iframe = document.getElementById('sfmclientFrame');
+               iframe.contentWindow.postMessage(msg, '*');  
+          },
+          error: function (msg) {
+              console.debug('Error fetching ticket: ' + msg);
+          }
+        });
+    }
+        
+    // Ping the server to automatically refresh the session token 
+    setInterval(refreshSession, 240000);
+    
+    function refreshSession() {
+        $.ajax({
+            url: "/Home/refreshTokenAsync",
+            type: "GET",
+            data: null,
+            traditional: true,
+        });
+    }
+</script>

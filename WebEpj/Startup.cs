@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using HelseId.Common.Clients;
 using HelseId.Common.Jwt;
+using HelseId.Common.Oidc;
+using HelseId.Common.RequestObjects;
 using IdentityModel;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -18,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using WebEpj.Extensions;
 
 namespace WebEpj
 {
@@ -132,7 +135,7 @@ namespace WebEpj
                                         };
 
                                         var client = new HelseIdClient(opt);
-                                        var response = await client.AcquireTokenByRefreshToken(refreshToken);
+                                        var response = await client.AcquireTokenByRefreshToken(refreshToken, false);
 
                                         if (!response.IsError)
                                         {
@@ -170,13 +173,14 @@ namespace WebEpj
                         var authenticationOptions = new AuthenticationOptions();
                         Configuration.GetSection("Authentication").Bind(authenticationOptions);
 
-                        options.UseTokenLifetime = false;
-                        options.ClientId = authenticationOptions.ClientId;
+                        options.ClientId = authenticationOptions.EpjVendorId;
                         options.SignInScheme = "Cookies";
                         options.Authority = authenticationOptions.Endpoint;
                         options.ResponseType = OidcConstants.ResponseTypes.Code;
+                        options.ResponseMode = OidcConstants.ResponseModes.FormPost;
                         options.RequireHttpsMetadata = false;
-
+                        options.UsePkce = true;
+                        
                         var scopes = "";
                         foreach (var item in authenticationOptions.Scopes)
                         {
@@ -187,29 +191,40 @@ namespace WebEpj
                         options.SignedOutRedirectUri = authenticationOptions.SignedOutRedirectUri;
                         options.GetClaimsFromUserInfoEndpoint = true;
                         options.SaveTokens = true;
-                        options.TokenValidationParameters = new TokenValidationParameters {ValidateAudience = false};
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            ValidateAudience = false
+                        };
 
                         options.Events = new OpenIdConnectEvents
                         {
                             OnAuthorizationCodeReceived = async ctx =>
                             {
-                                var opt = new HelseIdClientOptions
-                                {
-                                    ClientId = authenticationOptions.ClientId,
-                                    Authority = authenticationOptions.Endpoint,
-                                    RedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc",
-                                    PostLogoutRedirectUri = authenticationOptions.SignedOutRedirectUri,
-                                    SigningMethod =
-                                        (JwtGenerator.SigningMethod) Enum.Parse(typeof(JwtGenerator.SigningMethod),
-                                            "2"),
-                                    Scope = scopes.TrimEnd(),
-                                    Flow = IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid,
-                                };
+                                var isMultiTenant = ctx.TokenEndpointRequest.ClientId == authenticationOptions.EpjVendorId;
+
+                                var clientId = isMultiTenant
+                                    ? authenticationOptions.EpjVendorId
+                                    : authenticationOptions.OrganizationSfmId;
+
+                                var codeVerifier = isMultiTenant
+                                    ? ctx.TokenEndpointRequest.Parameters[OidcConstants.TokenRequest.CodeVerifier]
+                                    : string.Empty;
+                                
+                                var opt = new HelseIdClientOptions(clientId: clientId,
+                                    authority: authenticationOptions.Endpoint,
+                                    redirectUri: $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc",
+                                    postLogoutRedirectUri: authenticationOptions.SignedOutRedirectUri,
+                                    signingMethod: (JwtGenerator.SigningMethod) Enum.Parse(typeof(JwtGenerator.SigningMethod), "2"), 
+                                    scope: scopes.TrimEnd(),
+                                    flow: IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid);
 
                                 var client = new HelseIdClient(opt);
 
                                 var result =
-                                    await client.AcquireTokenByAuthorizationCodeAsync(ctx.ProtocolMessage.Code);
+                                    await client.AcquireTokenByAuthorizationCodeAsync(
+                                        ctx.ProtocolMessage.Code, 
+                                        codeVerifier, 
+                                        isMultiTenant);
 
                                 if (result.IsError)
                                 {
@@ -227,12 +242,94 @@ namespace WebEpj
                             },
                             OnRedirectToIdentityProvider = ctx =>
                             {
-                                ctx?.ProtocolMessage.Parameters.Remove("code_challenge");
-                                ctx?.ProtocolMessage.Parameters.Remove("code_challenge_method");
-                                ctx?.ProtocolMessage.Parameters.Remove("nonce");
+                                var isMultiTenant = ctx?.HttpContext?.Session.Get<bool>("MultiTenantOrganization") ?? false;
+
+                                if (isMultiTenant)
+                                {
+                                    options.ClientId = authenticationOptions.EpjVendorId;
+                                    ctx.ProtocolMessage.Parameters.Remove("client_id");
+                                    ctx.ProtocolMessage.Parameters.Add("client_id", authenticationOptions.EpjVendorId);
+                                    
+                                    var requestObject = new AuthorizationDetailsRequestObjectBuilder();
+
+                                    var parentOrg = ctx?.HttpContext?.Session.Get<string>("HelseIdParentOrganization");
+                                    var childOrg = ctx?.HttpContext?.Session.Get<string>("HelseIdChildOrganization");
+
+                                    // If we don't have any type of organization we'll be preemptive and throw a 401
+                                    // only exception to this - When the request is coming from the ClientWrapper
+                                    // in this scenario we'll allow it to proceed
+                                    if (string.IsNullOrEmpty(parentOrg) && string.IsNullOrEmpty(childOrg))
+                                    {
+                                        // We do not want these validation to be applied to ClientWrapper and just ClientWrapper
+                                        // There will be a refactoring on the organization on the server side where this condition should be removed
+                                        ctx.Response.StatusCode = 401;
+                                        ctx.HandleResponse();
+                                        return Task.CompletedTask;
+                                    }
+
+                                    // HelseId now accepts organizational claims
+                                    // in order for this to work we need to send a POST request to the authorization endpoint following
+                                    // the request object pattern. This is but a single token with an authorization_details claim present.
+                                    // We are bypassing our own HelseIdClient because the audience needs to be the authority and not the 
+                                    // TokenEndpointUrl that we got via discovery.
+                                    // More information on this
+                                    // GIT Samples => https://github-com.translate.goog/NorskHelsenett/HelseID.Samples/tree/master/HelseId.Samples.RequestObjectsDemo?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en-US&_x_tr_pto=op
+                                    // Confluence => https://helseid.atlassian.net/wiki/spaces/HELSEID/pages/5636230/Passing+organization+identifier+from+a+client+application+to+HelseID
+                                    // https://helseid.atlassian.net/wiki/spaces/HELSEID/pages/478183429/Passing+extended+context+information+to+HelseID
+
+                                    // We use 2 different systems:
+                                    // 1. only child is present - urn:oid:2.16.578.1.12.4.1.2.101
+                                    // 2. when we have parent/child or just parent organization - urn:oid:1.0.6523
+                                    var system = "urn:oid:1.0.6523";
+                                    var value = string.Empty;
+
+                                    // We have three different scenarios when calculating the value:
+                                    // 1. Only Parent - NO:ORGNR:[ParentOrganization] with system urn:oid:1.0.6523
+                                    // 2. Parent+child - NO:ORGNR:[ParentOrganization]:[ChildOrganization] with system urn:oid:1.0.6523
+                                    // 3. Only child - [ChildOrganization] with system urn:oid:2.16.578.1.12.4.1.2.101
+                                    if (!string.IsNullOrEmpty(parentOrg))
+                                    {
+                                        value = $"NO:ORGNR:{parentOrg}";
+
+                                        if (!string.IsNullOrEmpty(childOrg))
+                                        {
+                                            value = $"{value}:{childOrg}";
+                                        }
+                                    }
+                                    else if (!string.IsNullOrEmpty(childOrg))
+                                    {
+                                        value = childOrg;
+                                        system = "urn:oid:2.16.578.1.12.4.1.2.101";
+                                    }
+
+                                    if (!string.IsNullOrEmpty(value))
+                                    {
+                                        requestObject.AddHelseIdAuthorizationRequestObjectItem(system, value);
+                                    }
+
+                                    requestObject.AddJournalIdRequestObjectItem(authenticationOptions.OrganizationSfmId);
+
+                                    var token = JwtGenerator.GenerateWithRequestObject(ctx.Options.ClientId,
+                                        ctx.Options.Authority, 
+                                        ClientAssertion.LoadWebEpjVendorPrivateKey(),
+                                        SecurityAlgorithms.RsaSha512,
+                                        requestObject.Build());
+
+                                    ctx.ProtocolMessage.SetParameter("request", token);
+                                }
+                                else
+                                {
+                                    options.ClientId = authenticationOptions.OrganizationSfmId;
+                                    ctx?.ProtocolMessage.Parameters.Remove("client_id");
+                                    ctx?.ProtocolMessage.Parameters.Add("client_id", authenticationOptions.OrganizationSfmId);
+                                    
+                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge");
+                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge_method");
+                                    ctx?.ProtocolMessage.Parameters.Remove("nonce");
+                                }
 
                                 return Task.CompletedTask;
-                            },
+                            }
                         };
                     }).Services
                 .AddSession(options => { options.IdleTimeout = TimeSpan.FromHours(2); });

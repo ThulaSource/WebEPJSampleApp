@@ -11,11 +11,12 @@ using System.Web;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using WebEpj.Extensions;
 using WebEpj.Models;
 
 namespace WebEpj.Controllers
 {
-    [Authorize]
+    
     public class HomeController : Controller
     {
         private readonly ApplicationOptions applicationOptions;
@@ -34,7 +35,36 @@ namespace WebEpj.Controllers
             this.httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<IActionResult> Index()
+        [AllowAnonymous]
+        [HttpGet]
+        public IActionResult Index()
+        {
+            return View(nameof(Index));
+        }
+        
+        [AllowAnonymous]
+        [HttpPost]
+        public IActionResult SingleTenant()
+        {
+            HttpContext.Session.Set("MultiTenantOrganization", false);
+            
+            return RedirectToAction(nameof(Authenticate));
+        }
+        
+        [AllowAnonymous]
+        [HttpPost]
+        public IActionResult MultiTenant(string parentOrganization, string childOrganization)
+        {
+            HttpContext.Session.Set("MultiTenantOrganization", true);
+            HttpContext.Session.Set("HelseIdParentOrganization", parentOrganization);
+            HttpContext.Session.Set("HelseIdChildOrganization", childOrganization);
+            
+            return RedirectToAction(nameof(Authenticate));
+        }
+        
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> Authenticate()
         {
             var accessToken = await httpContextAccessor.HttpContext.GetTokenAsync("access_token");
             httpClient.SetBearerToken(accessToken);
@@ -50,7 +80,7 @@ namespace WebEpj.Controllers
             var responseAsJson = await response.Content.ReadAsStringAsync();
             var sessionInfo = JsonConvert.DeserializeObject<SessionResult>(responseAsJson);
 
-            var model = new HomeModel
+            var model = new AuthenticateModel
             {
                 SessionNonce = HttpUtility.UrlEncode(nonceValues.nonceBase64),
                 SessionCode = HttpUtility.UrlEncode(sessionInfo.Code),
@@ -58,15 +88,16 @@ namespace WebEpj.Controllers
                 Portals = GetPortals(sessionInfo.Metadata)
             };
 
-            return View(nameof(Index), model);
+            return View(nameof(Authenticate), model);
         }
-
+        
         private List<PortalModel> GetPortals(Dictionary<string, string> metadata)
         {
             return metadata.Select(item => new PortalModel {Name = item.Key.ToUpper(), Address = item.Value}).ToList();
         }
 
         [HttpGet]
+        [Authorize]
         [Route("Home/loadTicketAsync")]
         public async Task<IActionResult> LoadTicketAsync([FromQuery] string patientIdentifier)
         {
@@ -84,6 +115,7 @@ namespace WebEpj.Controllers
         }
         
         [HttpGet]
+        [Authorize]
         [Route("Home/refreshTokenAsync")]
         public async Task<IActionResult> RefreshTokenAsync()
         {
@@ -103,6 +135,7 @@ namespace WebEpj.Controllers
         } 
         
         [HttpPost]
+        [Authorize(AuthenticationSchemes = "Cookies")]
         [Route("Home/endSessionAsync")]
         public async Task<IActionResult> EndSessionAsync()
         {
@@ -119,5 +152,7 @@ namespace WebEpj.Controllers
             var idToken = await httpContextAccessor.HttpContext.GetTokenAsync("id_token");
             return Redirect($"{authenticationOptions.Endpoint}/connect/endsession?id_token_hint={idToken}");
         }
+
+       
     }
 }

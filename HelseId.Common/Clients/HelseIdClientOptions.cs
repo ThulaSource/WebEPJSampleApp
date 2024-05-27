@@ -7,6 +7,21 @@ namespace HelseId.Common.Clients
 {
     public class HelseIdClientOptions : OidcClientOptions
     {
+        public HelseIdClientOptions()
+        {
+        }
+
+        public HelseIdClientOptions(string clientId, string authority, string redirectUri, string postLogoutRedirectUri, SigningMethod signingMethod, string scope, AuthenticationFlow flow)
+        {
+            ClientId = clientId;
+            Authority = authority;
+            RedirectUri = redirectUri;
+            PostLogoutRedirectUri = postLogoutRedirectUri;
+            SigningMethod = signingMethod;
+            Scope = scope;
+            Flow = flow;
+        }
+
         /// <summary>
         /// The thumbprint of the certificate to use for client assertion.
         /// </summary>

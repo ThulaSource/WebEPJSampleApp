@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using HelseId.Common.Extensions;
+using HelseId.Common.RequestObjects;
 using IdentityModel;
 using Microsoft.IdentityModel.Tokens;
 
@@ -74,6 +75,36 @@ namespace HelseId.Common.Jwt
 
             return GenerateJwt(clientId, tokenEndpoint, null, signingMethod, securityKey, securityAlgorithm);
         }
+        
+        /// <summary>
+        /// Generates a new token adding the supplied request object as payload
+        /// </summary>
+        /// <param name="clientId">The oidc client identifier</param>
+        /// <param name="tokenEndpoint">The oidc token endpoint</param>
+        /// <param name="securityKey">The security key to sign the token</param>
+        /// <param name="securityAlgorithm">The security algorithm</param>
+        /// <param name="clock">The current instance of system clock</param>
+        /// <param name="requestObject">The request object</param>
+        public static string GenerateWithRequestObject(string clientId,
+            string tokenEndpoint,
+            SecurityKey securityKey,
+            string securityAlgorithm,
+            IRequestObject requestObject)
+        {
+            if (string.IsNullOrEmpty(clientId))
+                throw new ArgumentException("clientId can not be empty or null");
+
+            if (string.IsNullOrEmpty(tokenEndpoint))
+                throw new ArgumentException("The token endpoint address can not be empty or null");
+
+            if (securityKey == null)
+                throw new ArgumentException("The security key can not be null");
+
+            if (string.IsNullOrEmpty(securityAlgorithm))
+                throw new ArgumentException("The security algorithm can not be empty or null");
+
+            return GenerateJwtWithPayload(clientId, tokenEndpoint, securityKey, securityAlgorithm, requestObject);
+        }
 
 
         /// <summary>
@@ -96,6 +127,29 @@ namespace HelseId.Common.Jwt
             if (signingMethod == SigningMethod.X509EnterpriseSecurityKey)
                 UpdateJwtHeader(securityKey, jwt);
 
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            return tokenHandler.WriteToken(jwt);
+        }
+        
+        private static string GenerateJwtWithPayload(string clientId, string audience, SecurityKey securityKey,
+            string securityAlgorithm, IRequestObject requestObject)
+        {
+            var signingCredentials = new SigningCredentials(securityKey, securityAlgorithm);
+
+            var payload = new JwtPayload(
+                clientId,
+                audience,
+                null,
+                DateTime.UtcNow,
+                DateTime.UtcNow.AddSeconds(60));
+
+            payload.Add(requestObject.Key, requestObject.RequestObjectItems);
+
+            var header = new JwtHeader(signingCredentials);
+            var jwt = new JwtSecurityToken(header, payload);
+
+            UpdateJwtHeader(securityKey, jwt);
 
             var tokenHandler = new JwtSecurityTokenHandler();
             return tokenHandler.WriteToken(jwt);

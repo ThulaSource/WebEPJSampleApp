@@ -9,7 +9,9 @@ namespace WebEpj
     {
         public string Endpoint { get; set; }
             
-        public string ClientId { get; set; }
+        public string OrganizationSfmId { get; set; }
+        
+        public string EpjVendorId { get; set; }
             
         public string SignedOutRedirectUri { get; set; }
             
