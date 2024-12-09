@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
@@ -87,10 +89,45 @@ namespace WebEpj.Controllers
                 ApiUrl = sessionInfo.ApiAddress,
                 Portals = GetPortals(sessionInfo.Metadata)
             };
+            
+            var hpr = ReadTokenClaim("helseid://claims/hpr/hpr_number", accessToken);
+            var org = ReadTokenClaim("helseid://claims/client/claims/orgnr_parent", accessToken);
+            
+            model.SetClientHeaders($"sfm-test-epj",
+                org,
+                HashValue(hpr));
 
             return View(nameof(Authenticate), model);
         }
+
+        private string HashValue(string value)
+        {
+            if (value == null)
+            {
+                return null;
+            }
         
+            // Calculate the hash
+            using var sha256 = SHA256.Create();
+            var inputBytes = Encoding.ASCII.GetBytes(value);
+            var hash = sha256.ComputeHash(inputBytes);
+
+            // Convert byte array to hex string
+            var sb = new StringBuilder();
+            foreach (var t in hash)
+            {
+                sb.Append(t.ToString("X2"));
+            }
+            return sb.ToString();
+        }
+
+        private string ReadTokenClaim(string claimKey, string accessToken)
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(accessToken);
+            return jwtToken.Claims.FirstOrDefault(c => c.Type == claimKey)?.Value;
+        }
+
         private List<PortalModel> GetPortals(Dictionary<string, string> metadata)
         {
             return metadata.Select(item => new PortalModel {Name = item.Key.ToUpper(), Address = item.Value}).ToList();

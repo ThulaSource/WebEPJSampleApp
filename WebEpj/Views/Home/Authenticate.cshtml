@@ -2,6 +2,7 @@
     ViewData["Title"] = "Authenticated Page";
 }
 
+@using System.Text.Json
 @model AuthenticateModel
 
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -60,10 +61,13 @@
                 console.debug('Start sfm login on sfm client...');
                 let sessionCode = decodeURIComponent('@Model.SessionCode');
                 let sessionNonce = decodeURIComponent('@Model.SessionNonce');
+                let metadata = @Html.Raw(JsonSerializer.Serialize(Model.Metadata));
+                
                 let msg={
                     'action': 'login', 
                     'code' : sessionCode, 
-                    'nonce': sessionNonce, 
+                    'nonce': sessionNonce,
+                    'metadata': metadata,
                     'apiEndpoint': '@Model.ApiUrl'
                 };
                 
