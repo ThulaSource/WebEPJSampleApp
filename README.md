@@ -22,10 +22,26 @@ Sampled functionalities:
 - Request a patient ticket from SFM (see HomeController.LoadTicketAsync)
 - Start, login and load a patient using SFM client (see javascript functions under Index.cshtml)
 
-What needsrto be configured:
+What needs to be configured:
 - appSettings:Authentication -> HelseId related settings
 - appSettings:SfmSessionGatewayEndpoint -> The SFM session gateway endpoint
 - HelseIdClientRsaPrivateKey.pem file -> This is the HelseId Client private key
+
+## HelseID PAR login
+
+The sample requires .NET 10 and uses the native ASP.NET Core OpenID Connect PAR implementation. The login flow is Authorization Code with PKCE, and PAR is required rather than optional.
+
+Before running the sample:
+
+- The HelseID discovery document configured by `Authentication:Endpoint` must advertise a `pushed_authorization_request_endpoint`.
+- `Authentication:OrganizationSfmId` and `Authentication:EpjVendorId` must identify clients registered for PAR and `private_key_jwt` client authentication.
+- The configured redirect URI must match the HelseID client registration.
+- The organization and EPJ vendor private keys embedded by the sample must match the public keys registered for the respective HelseID clients.
+- The scopes in `Authentication:Scopes` must be assigned to the clients in the target HelseID environment.
+
+During login, the middleware sends the authorization parameters to the HelseID PAR endpoint. This includes the signed `request` object containing organization context for the multi-tenant flow. The PAR request is authenticated with a short-lived client assertion, using the organization key for single-tenant login and the EPJ vendor key for multi-tenant login. HelseID returns a `request_uri`, and the browser is redirected to the authorization endpoint with that reference. Authorization code redemption remains handled by the existing WebEPJ flow.
+
+This implementation only introduces PAR. API calls still use Bearer tokens; DPoP is handled separately.
 
 
  

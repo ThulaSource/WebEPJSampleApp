@@ -179,6 +179,7 @@ namespace WebEpj
                         options.ResponseMode = OidcConstants.ResponseModes.FormPost;
                         options.RequireHttpsMetadata = false;
                         options.UsePkce = true;
+                        options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Require;
                         
                         var scopes = "";
                         foreach (var item in authenticationOptions.Scopes)
@@ -205,9 +206,8 @@ namespace WebEpj
                                     ? authenticationOptions.EpjVendorId
                                     : authenticationOptions.OrganizationSfmId;
 
-                                var codeVerifier = isMultiTenant
-                                    ? ctx.TokenEndpointRequest.Parameters[OidcConstants.TokenRequest.CodeVerifier]
-                                    : string.Empty;
+                                var codeVerifier =
+                                    ctx.TokenEndpointRequest.Parameters[OidcConstants.TokenRequest.CodeVerifier];
                                 
                                 var opt = new HelseIdClientOptions(clientId: clientId,
                                     authority: authenticationOptions.Endpoint,
@@ -321,12 +321,31 @@ namespace WebEpj
                                     ctx?.ProtocolMessage.Parameters.Remove("client_id");
                                     ctx?.ProtocolMessage.Parameters.Add("client_id", authenticationOptions.OrganizationSfmId);
                                     
-                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge");
-                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge_method");
                                     ctx?.ProtocolMessage.Parameters.Remove("nonce");
                                 }
 
                                 return Task.CompletedTask;
+                            },
+                            OnPushAuthorization = async ctx =>
+                            {
+                                var isMultiTenant =
+                                    ctx.HttpContext.Session.Get<bool>("MultiTenantOrganization");
+                                var discovery = await OidcDiscoveryHelper.GetDiscoveryDocument(ctx.Options.Authority);
+
+                                if (discovery.IsError)
+                                {
+                                    throw new ApplicationException(discovery.Error);
+                                }
+
+                                var clientAssertion = ClientAssertion.CreateWithRsaKeys(
+                                    ctx.Options.ClientId,
+                                    discovery.Issuer,
+                                    isMultiTenant);
+
+                                ctx.ProtocolMessage.ClientAssertionType =
+                                    clientAssertion.client_assertion_type;
+                                ctx.ProtocolMessage.ClientAssertion = clientAssertion.client_assertion;
+                                ctx.HandleClientAuthentication();
                             }
                         };
                     }).Services
