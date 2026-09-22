@@ -1,16 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
     <LangVersion>11</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HelseId.Constants" Version="0.5.2" />
-    <PackageReference Include="IdentityModel" Version="3.6.1" />
-    <PackageReference Include="IdentityModel.OidcClient" Version="2.6.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="HelseId.Constants" />
+    <PackageReference Include="IdentityModel" />
+    <PackageReference Include="IdentityModel.OidcClient" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
