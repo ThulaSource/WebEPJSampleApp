@@ -18,5 +18,7 @@ namespace WebEpj
         public string[] Scopes { get; set; }
             
         public int? TokenRenewCheckInMinutes { get; set; }
+
+        public string DPoPKey { get; set; }
     }
 }

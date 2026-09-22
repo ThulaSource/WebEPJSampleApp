@@ -41,7 +41,11 @@ Before running the sample:
 
 During login, the middleware sends the authorization parameters to the HelseID PAR endpoint. This includes the signed `request` object containing organization context for the multi-tenant flow. The PAR request is authenticated with a short-lived client assertion, using the organization key for single-tenant login and the EPJ vendor key for multi-tenant login. HelseID returns a `request_uri`, and the browser is redirected to the authorization endpoint with that reference. Authorization code redemption remains handled by the existing WebEPJ flow.
 
-This implementation only introduces PAR. API calls still use Bearer tokens; DPoP is handled separately.
+## DPoP Session Service calls
+
+The Session Service calls use DPoP with the `e-helse:sfm.api/sfm.api2` scope. The demo uses one dedicated DPoP private JWK, configured as `Authentication:DPoPKey`, and keeps it separate from the HelseID client assertion keys.
+
+The DPoP proof is generated for each request with the actual HTTP method and URL and includes the access-token hash (`ath`). Requests use `Authorization: DPoP <access-token>` and the `DPoP` header. The Session Service paths use the `/api/v2` API.
 
 
  

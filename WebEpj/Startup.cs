@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Threading.Tasks;
 using HelseId.Common.Clients;
+using HelseId.Common.DPoP;
 using HelseId.Common.Jwt;
 using HelseId.Common.Oidc;
 using HelseId.Common.RequestObjects;
@@ -21,6 +22,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using WebEpj.Extensions;
+using WebEpj.DPoP;
+using WebEpj.Session;
 
 namespace WebEpj
 {
@@ -37,6 +40,8 @@ namespace WebEpj
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddHealthChecks();
+            services.AddSingleton<IDPoPProofProvider, DPoPProofProvider>();
+            services.AddScoped<ISessionGatewayClient, SessionGatewayClient>();
             services.AddHttpContextAccessor()
                 .Configure<ApplicationOptions>(Configuration)
                 .Configure<AuthenticationOptions>(Configuration.GetSection("Authentication"))
@@ -133,7 +138,9 @@ namespace WebEpj
                                             RedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc"
                                         };
 
-                                        var client = new HelseIdClient(opt);
+                                        var dPoPProofCreator = ctx.HttpContext.RequestServices
+                                            .GetRequiredService<IDPoPProofProvider>().GetProofCreator();
+                                        var client = new HelseIdClient(opt, dPoPProofCreator);
                                         var response = await client.AcquireTokenByRefreshToken(refreshToken, false);
 
                                         if (!response.IsError)
@@ -216,7 +223,9 @@ namespace WebEpj
                                     signingMethod: (JwtGenerator.SigningMethod) Enum.Parse(typeof(JwtGenerator.SigningMethod), "2"), 
                                     scope: scopes.TrimEnd());
 
-                                var client = new HelseIdClient(opt);
+                                var dPoPProofCreator = ctx.HttpContext.RequestServices
+                                    .GetRequiredService<IDPoPProofProvider>().GetProofCreator();
+                                var client = new HelseIdClient(opt, dPoPProofCreator);
 
                                 var result =
                                     await client.AcquireTokenByAuthorizationCodeAsync(

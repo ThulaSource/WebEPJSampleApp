@@ -1,5 +1,6 @@
 ﻿using HelseId.Common.Browser;
 using HelseId.Common.Oidc;
+using HelseId.Common.DPoP;
 using Duende.IdentityModel.Client;
 using Duende.IdentityModel.OidcClient;
 using System;
@@ -23,12 +24,14 @@ namespace HelseId.Common.Clients
     {
         private readonly HelseIdClientOptions _options;
         private OidcClient oidcClient;
+        private readonly IDPoPProofCreator dPoPProofCreator;
 
-        public HelseIdClient(HelseIdClientOptions options)
+        public HelseIdClient(HelseIdClientOptions options, IDPoPProofCreator dPoPProofCreator = null)
         {
             options.Check();
 
             _options = options;
+            this.dPoPProofCreator = dPoPProofCreator;
             if (_options.Browser == null)
             {
                 _options.Browser = new SystemBrowser(_options.RedirectUri);
@@ -119,8 +122,24 @@ namespace HelseId.Common.Clients
                 Code = code,
                 RedirectUri = _options.RedirectUri,
                 CodeVerifier = codeVerifier,
-                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant)
+                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant),
+                DPoPProofToken = CreateTokenEndpointProof(disco.TokenEndpoint)
             });
+
+            if (IsDpopNonceError(result) && !string.IsNullOrWhiteSpace(result.DPoPNonce))
+            {
+                result = await httpClient.RequestAuthorizationCodeTokenAsync(new AuthorizationCodeTokenRequest
+                {
+                    Address = disco.TokenEndpoint,
+                    ClientId = _options.ClientId,
+                    ClientSecret = _options.ClientSecret,
+                    Code = code,
+                    RedirectUri = _options.RedirectUri,
+                    CodeVerifier = codeVerifier,
+                    Parameters = GetBackChannelExtraParameters(disco, isMultiTenant),
+                    DPoPProofToken = CreateTokenEndpointProof(disco.TokenEndpoint, result.DPoPNonce)
+                });
+            }
 
             return result;
         }
@@ -137,10 +156,34 @@ namespace HelseId.Common.Clients
                 ClientId = _options.ClientId,
                 ClientSecret = _options.ClientSecret,
                 RefreshToken = refreshToken,
-                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant)
+                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant),
+                DPoPProofToken = CreateTokenEndpointProof(disco.TokenEndpoint)
             });
 
+            if (IsDpopNonceError(result) && !string.IsNullOrWhiteSpace(result.DPoPNonce))
+            {
+                result = await httpClient.RequestRefreshTokenAsync(new RefreshTokenRequest
+                {
+                    Address = disco.TokenEndpoint,
+                    ClientId = _options.ClientId,
+                    ClientSecret = _options.ClientSecret,
+                    RefreshToken = refreshToken,
+                    Parameters = GetBackChannelExtraParameters(disco, isMultiTenant),
+                    DPoPProofToken = CreateTokenEndpointProof(disco.TokenEndpoint, result.DPoPNonce)
+                });
+            }
+
             return result;
+        }
+
+        private string CreateTokenEndpointProof(string tokenEndpoint, string nonce = null)
+        {
+            return dPoPProofCreator?.CreateProof(tokenEndpoint, "POST", nonce);
+        }
+
+        private static bool IsDpopNonceError(TokenResponse response)
+        {
+            return response?.Error == "use_dpop_nonce";
         }
 
         private Parameters GetFrontChannelExtraParameters()
