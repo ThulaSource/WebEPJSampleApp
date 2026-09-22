@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using HelseId.Common.Extensions;
 using HelseId.Common.RequestObjects;
-using IdentityModel;
+using Duende.IdentityModel;
 using Microsoft.IdentityModel.Tokens;
 
 namespace HelseId.Common.Jwt
@@ -159,12 +159,12 @@ namespace HelseId.Common.Jwt
         {
             if (key is X509SecurityKey x509Key)
             {
-                var thumbprint = Base64Url.Encode(x509Key.Certificate.GetCertHash());
+                var thumbprint = Base64UrlEncoder.Encode(x509Key.Certificate.GetCertHash());
                 var x5C = GenerateX5C(x509Key.Certificate);
                 var pubKey = x509Key.PublicKey as RSA;
                 var parameters = pubKey.ExportParameters(false);
-                var exponent = Base64Url.Encode(parameters.Exponent);
-                var modulus = Base64Url.Encode(parameters.Modulus);
+                var exponent = Base64UrlEncoder.Encode(parameters.Exponent);
+                var modulus = Base64UrlEncoder.Encode(parameters.Modulus);
 
                 token.Header.Add("x5c", x5C);
                 token.Header.Add("kty", pubKey.SignatureAlgorithm);
@@ -177,8 +177,8 @@ namespace HelseId.Common.Jwt
             if (key is RsaSecurityKey rsaKey)
             {
                 var parameters = rsaKey.Rsa?.ExportParameters(false) ?? rsaKey.Parameters;
-                var exponent = Base64Url.Encode(parameters.Exponent);
-                var modulus = Base64Url.Encode(parameters.Modulus);
+                var exponent = Base64UrlEncoder.Encode(parameters.Exponent);
+                var modulus = Base64UrlEncoder.Encode(parameters.Modulus);
 
                 token.Header.Add("kty", "RSA");
                 token.Header.Add("use", "sig");

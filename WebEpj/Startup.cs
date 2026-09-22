@@ -7,7 +7,7 @@ using HelseId.Common.Clients;
 using HelseId.Common.Jwt;
 using HelseId.Common.Oidc;
 using HelseId.Common.RequestObjects;
-using IdentityModel;
+using Duende.IdentityModel;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -130,7 +130,6 @@ namespace WebEpj
                                             SigningMethod =
                                                 (JwtGenerator.SigningMethod) Enum.Parse(
                                                     typeof(JwtGenerator.SigningMethod), "2"),
-                                            Flow = IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid,
                                             RedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc"
                                         };
 
@@ -215,8 +214,7 @@ namespace WebEpj
                                     redirectUri: $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc",
                                     postLogoutRedirectUri: authenticationOptions.SignedOutRedirectUri,
                                     signingMethod: (JwtGenerator.SigningMethod) Enum.Parse(typeof(JwtGenerator.SigningMethod), "2"), 
-                                    scope: scopes.TrimEnd(),
-                                    flow: IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid);
+                                    scope: scopes.TrimEnd());
 
                                 var client = new HelseIdClient(opt);
 

@@ -1,5 +1,6 @@
-﻿using IdentityModel.OidcClient.Browser;
+using Duende.IdentityModel.OidcClient.Browser;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HelseId.Common.Browser
@@ -13,7 +14,7 @@ namespace HelseId.Common.Browser
             _redirectUri = redirectUri;
         }
 
-        public async Task<BrowserResult> InvokeAsync(BrowserOptions options)
+        public async Task<BrowserResult> InvokeAsync(BrowserOptions options, CancellationToken cancellationToken = default)
         {
             using (var listener = new BrowserRequestHandler(_redirectUri))
             {
@@ -21,7 +22,7 @@ namespace HelseId.Common.Browser
 
                 try
                 {
-                    var result = await listener.WaitForCallbackAsync();
+                    var result = await listener.WaitForCallbackAsync().WaitAsync(cancellationToken);
                     if (String.IsNullOrWhiteSpace(result))
                     {
                         return new BrowserResult { ResultType = BrowserResultType.UnknownError, Error = "Empty response." };
@@ -41,6 +42,5 @@ namespace HelseId.Common.Browser
         }
 
         public abstract void OpenBrowser(string url);
-       
     }
 }

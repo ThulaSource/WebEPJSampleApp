@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using HelseId.Common.Extensions;
 using Org.BouncyCastle.Crypto;
@@ -25,6 +26,7 @@ namespace HelseId.Common.Crypto
         /// </summary>
         /// <param name="includePrivateParameters">If true the private parameters will be included in the xml formatted key</param>
         /// <returns></returns>
+        [SupportedOSPlatform("windows")]
         public static string CreateNewKey(bool includePrivateParameters)
         {
             CngKey cngKey;
@@ -74,6 +76,7 @@ namespace HelseId.Common.Crypto
 
         }
 
+        [SupportedOSPlatform("windows")]
         public static RSA GetRsa()
         {
             try
@@ -134,6 +137,7 @@ namespace HelseId.Common.Crypto
             }
         }
 
+        [SupportedOSPlatform("windows")]
         public static string GetPublicKeyAsXml()
         {
             try
@@ -155,6 +159,7 @@ namespace HelseId.Common.Crypto
 
         }
 
+        [SupportedOSPlatform("windows")]
         public static bool KeyExists()
         {
             try
@@ -170,6 +175,7 @@ namespace HelseId.Common.Crypto
             }
         }
 
+        [SupportedOSPlatform("windows")]
         public static void DeleteKey()
         {
             try

@@ -1,8 +1,9 @@
 ﻿using HelseId.Common.Browser;
 using HelseId.Common.Oidc;
-using IdentityModel.Client;
-using IdentityModel.OidcClient;
+using Duende.IdentityModel.Client;
+using Duende.IdentityModel.OidcClient;
 using System;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
 using static HelseId.Common.Jwt.JwtGenerator;
@@ -61,18 +62,23 @@ namespace HelseId.Common.Clients
         public async Task<TokenResponse> ClientCredentialsSignIn(bool isMultiTenant)
         {
 
-            // TODO: Rewrite for new IdentityModel, use extension methods on HttpClient
             var disco = await OidcDiscoveryHelper.GetDiscoveryDocument(_options.Authority);
             if (disco.IsError) throw new Exception(disco.Error);
 
-            var extraParams = GetBackChannelExtraParameters(disco, isMultiTenant);
-            var c = new TokenClient(disco.TokenEndpoint, _options.ClientId, _options.ClientSecret);
-            var result = await c.RequestClientCredentialsAsync(_options.Scope, extraParams);
+            using var httpClient = new HttpClient();
+            var result = await httpClient.RequestClientCredentialsTokenAsync(new ClientCredentialsTokenRequest
+            {
+                Address = disco.TokenEndpoint,
+                ClientId = _options.ClientId,
+                ClientSecret = _options.ClientSecret,
+                Scope = _options.Scope,
+                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant)
+            });
 
             return result;
         }
 
-        private object GetBackChannelExtraParameters(DiscoveryResponse disco, bool isMultiTenant,
+        private Parameters GetBackChannelExtraParameters(DiscoveryDocumentResponse disco, bool isMultiTenant,
             string token = null)
         {
             Oidc.ClientAssertion assertion = null;
@@ -85,13 +91,17 @@ namespace HelseId.Common.Clients
                 assertion = Oidc.ClientAssertion.CreateWithEnterpriseCertificate(_options.ClientId, disco.TokenEndpoint, _options.CertificateThumbprint);
             }
 
-            var payload = new
+            var parameters = new Parameters();
+            if (!string.IsNullOrEmpty(token))
             {
-                token,
-                assertion?.client_assertion,
-                assertion?.client_assertion_type,
-            };
-            return payload;
+                parameters.Add("token", token);
+            }
+            if (assertion != null)
+            {
+                parameters.Add("client_assertion", assertion.client_assertion);
+                parameters.Add("client_assertion_type", assertion.client_assertion_type);
+            }
+            return parameters;
         }
 
         public async Task<TokenResponse> AcquireTokenByAuthorizationCodeAsync(string code, string codeVerifier,
@@ -100,9 +110,17 @@ namespace HelseId.Common.Clients
             var disco = await OidcDiscoveryHelper.GetDiscoveryDocument(_options.Authority);
             if (disco.IsError) throw new Exception(disco.Error);
 
-            var extraParams = GetBackChannelExtraParameters(disco, isMultiTenant);
-            var c = new TokenClient(disco.TokenEndpoint, _options.ClientId, _options.ClientSecret);
-            var result = await c.RequestAuthorizationCodeAsync(code, _options.RedirectUri, codeVerifier, extraParams);
+            using var httpClient = new HttpClient();
+            var result = await httpClient.RequestAuthorizationCodeTokenAsync(new AuthorizationCodeTokenRequest
+            {
+                Address = disco.TokenEndpoint,
+                ClientId = _options.ClientId,
+                ClientSecret = _options.ClientSecret,
+                Code = code,
+                RedirectUri = _options.RedirectUri,
+                CodeVerifier = codeVerifier,
+                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant)
+            });
 
             return result;
         }
@@ -112,21 +130,31 @@ namespace HelseId.Common.Clients
             var disco = await OidcDiscoveryHelper.GetDiscoveryDocument(_options.Authority);
             if (disco.IsError) throw new Exception(disco.Error);
 
-            var extraParams = GetBackChannelExtraParameters(disco, isMultiTenant);
-            var c = new TokenClient(disco.TokenEndpoint, _options.ClientId, _options.ClientSecret);
-            var result = await c.RequestRefreshTokenAsync(refreshToken, extraParams);
+            using var httpClient = new HttpClient();
+            var result = await httpClient.RequestRefreshTokenAsync(new RefreshTokenRequest
+            {
+                Address = disco.TokenEndpoint,
+                ClientId = _options.ClientId,
+                ClientSecret = _options.ClientSecret,
+                RefreshToken = refreshToken,
+                Parameters = GetBackChannelExtraParameters(disco, isMultiTenant)
+            });
 
             return result;
         }
 
-        private object GetFrontChannelExtraParameters()
+        private Parameters GetFrontChannelExtraParameters()
         {
             var preselectIdp = _options.PreselectIdp;
 
             if (string.IsNullOrEmpty(preselectIdp))
                 return null;
 
-            return new { acr_values = preselectIdp, prompt = "Login" };
+            return new Parameters
+            {
+                { "acr_values", preselectIdp },
+                { "prompt", "Login" }
+            };
         }
 
         public async Task<TokenResponse> TokenExchange(string accessToken, bool isMultiTenant)
@@ -136,14 +164,22 @@ namespace HelseId.Common.Clients
                 throw new ArgumentNullException("AccessToken");
             }
 
-            var disco = await DiscoveryClient.GetAsync(_options.Authority);
+            var disco = await OidcDiscoveryHelper.GetDiscoveryDocument(_options.Authority);
             if (disco.IsError) throw new Exception(disco.Error);
-            var client = new TokenClient(disco.TokenEndpoint, _options.ClientId, _options.ClientSecret);
 
             var payload = GetBackChannelExtraParameters(disco, isMultiTenant, accessToken);
+            payload.Add("scope", _options.Scope);
 
             // send custom grant to token endpoint, return response
-            var response = await client.RequestCustomGrantAsync("token_exchange", _options.Scope, payload);
+            using var httpClient = new HttpClient();
+            var response = await httpClient.RequestTokenAsync(new TokenRequest
+            {
+                Address = disco.TokenEndpoint,
+                ClientId = _options.ClientId,
+                ClientSecret = _options.ClientSecret,
+                GrantType = "token_exchange",
+                Parameters = payload
+            });
 
             return response;
         }

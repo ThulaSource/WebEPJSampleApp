@@ -1,5 +1,5 @@
 ﻿using HelseId.Common.Crypto;
-using IdentityModel.OidcClient;
+using Duende.IdentityModel.OidcClient;
 using System;
 using static HelseId.Common.Jwt.JwtGenerator;
 
@@ -11,7 +11,7 @@ namespace HelseId.Common.Clients
         {
         }
 
-        public HelseIdClientOptions(string clientId, string authority, string redirectUri, string postLogoutRedirectUri, SigningMethod signingMethod, string scope, AuthenticationFlow flow)
+        public HelseIdClientOptions(string clientId, string authority, string redirectUri, string postLogoutRedirectUri, SigningMethod signingMethod, string scope)
         {
             ClientId = clientId;
             Authority = authority;
@@ -19,7 +19,6 @@ namespace HelseId.Common.Clients
             PostLogoutRedirectUri = postLogoutRedirectUri;
             SigningMethod = signingMethod;
             Scope = scope;
-            Flow = flow;
         }
 
         /// <summary>

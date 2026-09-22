@@ -1,15 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <LangVersion>11</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HelseId.Constants" />
-    <PackageReference Include="IdentityModel" />
-    <PackageReference Include="IdentityModel.OidcClient" />
     <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>

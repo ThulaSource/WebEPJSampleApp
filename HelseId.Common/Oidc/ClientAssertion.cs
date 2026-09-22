@@ -45,7 +45,7 @@ namespace HelseId.Common.Oidc
         public string client_assertion { get; set; }
 
         [JsonProperty("client_assertion_type")]
-        public string client_assertion_type { get; set; } = IdentityModel.OidcConstants.ClientAssertionTypes.JwtBearer;
+        public string client_assertion_type { get; set; } = Duende.IdentityModel.OidcConstants.ClientAssertionTypes.JwtBearer;
         
         public static RsaSecurityKey LoadWebEpjVendorPrivateKey()
         {

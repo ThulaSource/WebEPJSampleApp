@@ -1,16 +1,15 @@
-﻿using System.Threading.Tasks;
-using IdentityModel.Client;
+using Duende.IdentityModel.Client;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace HelseId.Common.Oidc
 {
     public class OidcDiscoveryHelper
     {
-        public static async Task<DiscoveryResponse> GetDiscoveryDocument(string authority)
+        public static async Task<DiscoveryDocumentResponse> GetDiscoveryDocument(string authority)
         {
-            var discoClient = new DiscoveryClient(authority);
-            var discoveryResponse = await discoClient.GetAsync();
-
-            return discoveryResponse;
+            using var httpClient = new HttpClient();
+            return await httpClient.GetDiscoveryDocumentAsync(authority);
         }
     }
 }
