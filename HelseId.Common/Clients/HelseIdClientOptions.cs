@@ -1,6 +1,5 @@
-﻿using HelseId.Common.Crypto;
+﻿using System;
 using Duende.IdentityModel.OidcClient;
-using System;
 using static HelseId.Common.Jwt.JwtGenerator;
 
 namespace HelseId.Common.Clients

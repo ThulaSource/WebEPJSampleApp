@@ -4,9 +4,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Duende.IdentityModel;
 using HelseId.Common.Extensions;
 using HelseId.Common.RequestObjects;
-using Duende.IdentityModel;
 using Microsoft.IdentityModel.Tokens;
 
 namespace HelseId.Common.Jwt

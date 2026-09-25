@@ -1,7 +1,7 @@
-using Duende.IdentityModel.OidcClient.Browser;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Duende.IdentityModel.OidcClient.Browser;
 
 namespace HelseId.Common.Browser
 {

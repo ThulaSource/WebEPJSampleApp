@@ -4,27 +4,19 @@ using Microsoft.Extensions.Options;
 
 namespace WebEpj.DPoP;
 
-public interface IDPoPProofProvider
+public sealed class DPoPProofProvider : IDPoPProofCreator
 {
-    IDPoPProofCreator GetProofCreator();
-}
-
-public sealed class DPoPProofProvider : IDPoPProofProvider
-{
-    private readonly IDPoPProofCreator proofCreator;
+    private readonly DPoPProofCreator proofCreator;
 
     public DPoPProofProvider(IOptions<AuthenticationOptions> options)
     {
-        if (string.IsNullOrWhiteSpace(options.Value.DPoPKey))
-        {
-            throw new InvalidOperationException("A DPoP key must be configured.");
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Value.DPoPKey);
 
         proofCreator = new DPoPProofCreator(options.Value.DPoPKey);
     }
 
-    public IDPoPProofCreator GetProofCreator()
+    public string CreateProof(string url, string httpMethod, string nonce = null, string accessToken = null)
     {
-        return proofCreator;
+        return proofCreator.CreateProof(url, httpMethod, nonce, accessToken);
     }
 }

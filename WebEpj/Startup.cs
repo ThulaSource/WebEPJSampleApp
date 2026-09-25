@@ -2,13 +2,14 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Duende.IdentityModel;
 using HelseId.Common.Clients;
 using HelseId.Common.DPoP;
 using HelseId.Common.Jwt;
 using HelseId.Common.Oidc;
 using HelseId.Common.RequestObjects;
-using Duende.IdentityModel;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -21,8 +22,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using WebEpj.Extensions;
 using WebEpj.DPoP;
+using WebEpj.Extensions;
 using WebEpj.Session;
 
 namespace WebEpj
@@ -40,7 +41,7 @@ namespace WebEpj
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddHealthChecks();
-            services.AddSingleton<IDPoPProofProvider, DPoPProofProvider>();
+            services.AddSingleton<IDPoPProofCreator, DPoPProofProvider>();
             services.AddScoped<ISessionGatewayClient, SessionGatewayClient>();
             services.AddHttpContextAccessor()
                 .Configure<ApplicationOptions>(Configuration)
@@ -139,8 +140,9 @@ namespace WebEpj
                                         };
 
                                         var dPoPProofCreator = ctx.HttpContext.RequestServices
-                                            .GetRequiredService<IDPoPProofProvider>().GetProofCreator();
-                                        var client = new HelseIdClient(opt, dPoPProofCreator);
+                                            .GetRequiredService<IDPoPProofCreator>();
+                                        var httpClientFactory = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+                                        var client = new HelseIdClient(opt, dPoPProofCreator, httpClientFactory);
                                         var response = await client.AcquireTokenByRefreshToken(refreshToken, false);
 
                                         if (!response.IsError)
@@ -224,8 +226,9 @@ namespace WebEpj
                                     scope: scopes.TrimEnd());
 
                                 var dPoPProofCreator = ctx.HttpContext.RequestServices
-                                    .GetRequiredService<IDPoPProofProvider>().GetProofCreator();
-                                var client = new HelseIdClient(opt, dPoPProofCreator);
+                                    .GetRequiredService<IDPoPProofCreator>();
+                                var httpClientFactory = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+                                var client = new HelseIdClient(opt, dPoPProofCreator, httpClientFactory);
 
                                 var result =
                                     await client.AcquireTokenByAuthorizationCodeAsync(
@@ -339,7 +342,8 @@ namespace WebEpj
                             {
                                 var isMultiTenant =
                                     ctx.HttpContext.Session.Get<bool>("MultiTenantOrganization");
-                                var discovery = await OidcDiscoveryHelper.GetDiscoveryDocument(ctx.Options.Authority);
+                                var httpClient = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
+                                var discovery = await OidcDiscoveryHelper.GetDiscoveryDocument(ctx.Options.Authority, httpClient);
 
                                 if (discovery.IsError)
                                 {
