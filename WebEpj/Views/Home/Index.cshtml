@@ -12,8 +12,8 @@
                 <button class="btn btn-outline-primary my-2 my-sm-0 mr-2" type="submit">SingleTenant</button>
             </form>
             <form class="form-inline my-2 my-lg-0 border border-primary p-1" method="POST" asp-controller="Home" asp-action="MultiTenant">
-                <input id="parentOrganization" class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Parent Org." aria-label="ParentOrganization">
-                <input id="childOrganization" class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Child Org." aria-label="ChildOrganization">
+                <input id="parentOrganization" name="parentOrganization" class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Parent Org." aria-label="ParentOrganization">
+                <input id="childOrganization" name="childOrganization" class="form-control mr-sm-2" style="height: 37px; width: auto; display: inline;" type="search" placeholder="Child Org." aria-label="ChildOrganization">
                 <button class="btn btn-outline-secondary my-2 my-sm-0 mr-2" type="submit">MultiTenant</button>
             </form>
         </ul>

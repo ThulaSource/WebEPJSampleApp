@@ -322,7 +322,7 @@ namespace WebEpj
                                     var token = JwtGenerator.GenerateWithRequestObject(ctx.Options.ClientId,
                                         ctx.Options.Authority, 
                                         ClientAssertion.LoadWebEpjVendorPrivateKey(),
-                                        SecurityAlgorithms.RsaSha512,
+                                        SecurityAlgorithms.RsaSsaPssSha256,
                                         requestObject.Build());
 
                                     ctx.ProtocolMessage.SetParameter("request", token);
@@ -340,8 +340,7 @@ namespace WebEpj
                             },
                             OnPushAuthorization = async ctx =>
                             {
-                                var isMultiTenant =
-                                    ctx.HttpContext.Session.Get<bool>("MultiTenantOrganization");
+                                var isMultiTenant = ctx.HttpContext.Session.Get<bool>("MultiTenantOrganization");
                                 var httpClient = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
                                 var discovery = await OidcDiscoveryHelper.GetDiscoveryDocument(ctx.Options.Authority, httpClient);
 
@@ -355,8 +354,7 @@ namespace WebEpj
                                     discovery.Issuer,
                                     isMultiTenant);
 
-                                ctx.ProtocolMessage.ClientAssertionType =
-                                    clientAssertion.client_assertion_type;
+                                ctx.ProtocolMessage.ClientAssertionType = clientAssertion.client_assertion_type;
                                 ctx.ProtocolMessage.ClientAssertion = clientAssertion.client_assertion;
                                 ctx.HandleClientAuthentication();
                             }

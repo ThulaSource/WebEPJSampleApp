@@ -60,11 +60,11 @@ namespace HelseId.Common.Clients
             Oidc.ClientAssertion assertion = null;
             if (_options.SigningMethod == SigningMethod.RsaSecurityKey)
             {
-                assertion = Oidc.ClientAssertion.CreateWithRsaKeys(_options.ClientId, disco.TokenEndpoint, isMultiTenant);
+                assertion = Oidc.ClientAssertion.CreateWithRsaKeys(_options.ClientId, disco.Issuer, isMultiTenant);
             }
             if (_options.SigningMethod == SigningMethod.X509EnterpriseSecurityKey)
             {
-                assertion = Oidc.ClientAssertion.CreateWithEnterpriseCertificate(_options.ClientId, disco.TokenEndpoint, _options.CertificateThumbprint);
+                assertion = Oidc.ClientAssertion.CreateWithEnterpriseCertificate(_options.ClientId, disco.Issuer, _options.CertificateThumbprint);
             }
 
             var parameters = new Parameters();

@@ -27,7 +27,7 @@ namespace HelseId.Common.Oidc
                 securityKey = LoadWebEpjVendorPrivateKey();
             }
 
-            var assertion = JwtGenerator.Generate(clientId, tokenEndpointUrl, JwtGenerator.SigningMethod.RsaSecurityKey, securityKey, SecurityAlgorithms.RsaSha512);
+            var assertion = JwtGenerator.Generate(clientId, tokenEndpointUrl, JwtGenerator.SigningMethod.RsaSecurityKey, securityKey, SecurityAlgorithms.RsaSsaPssSha256);
 
             return new ClientAssertion{ client_assertion = assertion };
         }
@@ -36,7 +36,7 @@ namespace HelseId.Common.Oidc
         {
             var certificate = CertificateStore.GetCertificateByThumbprint(thumbprint);
             var securityKey = new X509SecurityKey(certificate);
-            var assertion = JwtGenerator.Generate(clientId, tokenEndpointUrl, JwtGenerator.SigningMethod.X509EnterpriseSecurityKey, securityKey, SecurityAlgorithms.RsaSha512);
+            var assertion = JwtGenerator.Generate(clientId, tokenEndpointUrl, JwtGenerator.SigningMethod.X509EnterpriseSecurityKey, securityKey, SecurityAlgorithms.RsaSsaPssSha256);
 
             return new ClientAssertion { client_assertion = assertion };
         }
@@ -49,15 +49,7 @@ namespace HelseId.Common.Oidc
         
         public static RsaSecurityKey LoadWebEpjVendorPrivateKey()
         {
-            var assembly = Assembly.GetEntryAssembly();
-            var resourceName = "WebEpj.HelseIdClientEpjVenderPrivateKey.json";
-
-            string jsonFile;
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
-            using (var reader = new StreamReader(stream))
-            {
-                jsonFile = reader.ReadToEnd();
-            }
+            var jsonFile = LoadWebEpjVendorPrivateKeyJson();
            
             var jsonWebKey = JsonWebKey.Create(jsonFile);
 
@@ -83,6 +75,17 @@ namespace HelseId.Common.Oidc
                 InverseQ = Base64UrlEncoder.DecodeBytes(jsonWebKey.QI)
             };
             return new RsaSecurityKey(rsaParameters);
+        }
+
+        public static string LoadWebEpjVendorPrivateKeyJson()
+        {
+            var assembly = Assembly.GetEntryAssembly();
+            var resourceName = "WebEpj.HelseIdClientEpjVenderPrivateKey.json";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName)
+                ?? throw new System.InvalidOperationException($"Embedded resource '{resourceName}' was not found.");
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
         }
     }
 }

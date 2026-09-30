@@ -4,10 +4,13 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using Duende.IdentityModel;
 using HelseId.Common.Extensions;
 using HelseId.Common.RequestObjects;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
 
 namespace HelseId.Common.Jwt
 {
@@ -18,7 +21,7 @@ namespace HelseId.Common.Jwt
             None, X509SecurityKey, RsaSecurityKey, X509EnterpriseSecurityKey
         }
 
-        private const double DefaultExpiryInHours = 10;
+        private const double DefaultClientAssertionExpiryInSeconds = 10;
 
         public static string Generate(string clientId,
                                     string audience,
@@ -124,8 +127,7 @@ namespace HelseId.Common.Jwt
 
             var jwt = CreateJwtSecurityToken(clientId, audience + "", expiryDate, signingCredentials, extraClaims);
 
-            if (signingMethod == SigningMethod.X509EnterpriseSecurityKey)
-                UpdateJwtHeader(securityKey, jwt);
+            UpdateJwtHeader(securityKey, jwt);
 
 
             var tokenHandler = new JwtSecurityTokenHandler();
@@ -135,24 +137,58 @@ namespace HelseId.Common.Jwt
         private static string GenerateJwtWithPayload(string clientId, string audience, SecurityKey securityKey,
             string securityAlgorithm, IRequestObject requestObject)
         {
+            var now = DateTime.UtcNow;
             var signingCredentials = new SigningCredentials(securityKey, securityAlgorithm);
 
-            var payload = new JwtPayload(
-                clientId,
-                audience,
-                null,
-                DateTime.UtcNow,
-                DateTime.UtcNow.AddSeconds(60));
+            var requestObjectItems = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(
+                JsonConvert.SerializeObject(requestObject.RequestObjectItems));
 
-            payload.Add(requestObject.Key, requestObject.RequestObjectItems);
+            var securityTokenDescriptor = new SecurityTokenDescriptor
+            {
+                Issuer = clientId,
+                Audience = audience,
+                Subject = null,
+                NotBefore = now,
+                Expires = now.AddSeconds(DefaultClientAssertionExpiryInSeconds),
+                SigningCredentials = signingCredentials,
+                Claims = new Dictionary<string, object>
+                {
+                    { OidcConstants.TokenRequest.ClientId, clientId },
+                    { JwtClaimTypes.JwtId, Guid.NewGuid().ToString("N") },
+                    { requestObject.Key, requestObjectItems }
+                }
+            };
 
-            var header = new JwtHeader(signingCredentials);
-            var jwt = new JwtSecurityToken(header, payload);
+            UpdateJwtHeader(securityKey, securityTokenDescriptor);
 
-            UpdateJwtHeader(securityKey, jwt);
+            return new JsonWebTokenHandler().CreateToken(securityTokenDescriptor);
+        }
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            return tokenHandler.WriteToken(jwt);
+        private static void UpdateJwtHeader(SecurityKey key, SecurityTokenDescriptor descriptor)
+        {
+            descriptor.AdditionalInnerHeaderClaims ??= new Dictionary<string, object>();
+
+            if (key is X509SecurityKey x509Key)
+            {
+                var publicKey = x509Key.PublicKey as RSA;
+                var parameters = publicKey.ExportParameters(false);
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.Kty] = publicKey.SignatureAlgorithm;
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.Use] = "sig";
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.E] = Base64UrlEncoder.Encode(parameters.Exponent);
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.N] = Base64UrlEncoder.Encode(parameters.Modulus);
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.X5c] = GenerateX5C(x509Key.Certificate);
+            }
+
+            if (key is RsaSecurityKey rsaKey)
+            {
+                var parameters = rsaKey.Rsa?.ExportParameters(false) ?? rsaKey.Parameters;
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.Kty] = "RSA";
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.Use] = "sig";
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.E] = Base64UrlEncoder.Encode(parameters.Exponent);
+                descriptor.AdditionalInnerHeaderClaims[JsonWebKeyParameterNames.N] = Base64UrlEncoder.Encode(parameters.Modulus);
+            }
+
+            descriptor.AdditionalInnerHeaderClaims[JwtClaimTypes.TokenType] = "client-authentication+jwt";
         }
 
         public static void UpdateJwtHeader(SecurityKey key, JwtSecurityToken token)
@@ -185,6 +221,8 @@ namespace HelseId.Common.Jwt
                 token.Header.Add("e", exponent);
                 token.Header.Add("n", modulus);
             }
+
+            token.Header[JwtClaimTypes.TokenType] = "client-authentication+jwt";
         }
 
         private static List<string> GenerateX5C(X509Certificate2 certificate)
@@ -214,11 +252,11 @@ namespace HelseId.Common.Jwt
 
         private static JwtSecurityToken CreateJwtSecurityToken(string clientId, string audience, DateTime? expiryDate, SigningCredentials signingCredentials, Dictionary<string, string> extraClaims)
         {
-
+            var now = DateTime.UtcNow;
             var claims = new List<Claim>
             {
                 new Claim(JwtClaimTypes.Subject, clientId),
-                new Claim(JwtClaimTypes.IssuedAt, new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+                new Claim(JwtClaimTypes.IssuedAt, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
                 new Claim(JwtClaimTypes.JwtId, Guid.NewGuid().ToString("N"))
             };
 
@@ -231,9 +269,9 @@ namespace HelseId.Common.Jwt
             }
 
             if (!expiryDate.HasValue)
-                expiryDate = DateTime.UtcNow.AddHours(DefaultExpiryInHours);
+                expiryDate = now.AddSeconds(DefaultClientAssertionExpiryInSeconds);
 
-            var token = new JwtSecurityToken(clientId, audience, claims, DateTime.Now, expiryDate, signingCredentials);
+            var token = new JwtSecurityToken(clientId, audience, claims, now, expiryDate, signingCredentials);
 
             return token;
         }

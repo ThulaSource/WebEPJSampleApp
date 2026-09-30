@@ -1,6 +1,6 @@
 using System;
 using HelseId.Common.DPoP;
-using Microsoft.Extensions.Options;
+using HelseId.Common.Oidc;
 
 namespace WebEpj.DPoP;
 
@@ -8,11 +8,9 @@ public sealed class DPoPProofProvider : IDPoPProofCreator
 {
     private readonly DPoPProofCreator proofCreator;
 
-    public DPoPProofProvider(IOptions<AuthenticationOptions> options)
+    public DPoPProofProvider()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.Value.DPoPKey);
-
-        proofCreator = new DPoPProofCreator(options.Value.DPoPKey);
+        proofCreator = new DPoPProofCreator(ClientAssertion.LoadWebEpjVendorPrivateKeyJson());
     }
 
     public string CreateProof(string url, string httpMethod, string nonce = null, string accessToken = null)

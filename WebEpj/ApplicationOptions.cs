@@ -19,6 +19,5 @@ namespace WebEpj
             
         public int? TokenRenewCheckInMinutes { get; set; }
 
-        public string DPoPKey { get; set; }
     }
 }
