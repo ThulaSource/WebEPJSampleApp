@@ -12,10 +12,6 @@ The sample demonstrates:
 - SFM session creation, renewal, termination, and patient ticket creation.
 - Opening a patient in the SFM client through `window.postMessage`.
 
-For support, refer to the [support contact information](https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492666/Kontaktinformasjon).
-
-For additional SFM integration information, refer to the [SFM full version documentation](https://e-resept.atlassian.net/wiki/spaces/SFMDOK/pages/2160492688/SFM+Fullversjon).
-
 ## Requirements
 
 - .NET SDK 10.
