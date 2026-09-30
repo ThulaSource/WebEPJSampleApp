@@ -1,10 +1,11 @@
-﻿using HelseId.Models.DCR.Api;
-using HelseId.Models.DCR.Client;
-using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using HelseId.Models.DCR.Api;
+using HelseId.Models.DCR.Client;
+using Newtonsoft.Json;
 
 namespace HelseId.Common.Clients
 {
@@ -19,12 +20,12 @@ namespace HelseId.Common.Clients
                 BaseAddress = new Uri(uri)
             };
             if(!string.IsNullOrEmpty(accessToken))
-                _client.SetBearerToken(accessToken);
+                _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
         public void SetBearerToken(string accessToken)
         {
-            _client.SetBearerToken(accessToken);
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
         public async Task<ClientResponse> GetClient(string id)

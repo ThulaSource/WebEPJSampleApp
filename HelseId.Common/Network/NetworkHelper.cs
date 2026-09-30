@@ -1,40 +1,28 @@
-﻿using System;
+using System;
 using System.Net;
-
+using System.Net.Http;
+using System.Threading;
 
 namespace HelseId.Common.Network
 {
     public class NetworkHelper
     {
+        private static readonly HttpClient HttpClient = new(new HttpClientHandler
+        {
+            AllowAutoRedirect = true
+        });
+
         public static bool StsIsAvailable(string url)
-        {            
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            
-            request.Timeout = 120;
-            request.AllowAutoRedirect = true;
-            
+        {
             try
             {
-                using (var response = request.GetResponse() as HttpWebResponse)
-                {
-                    if (response == null) return false;
-
-                    switch (response.StatusCode)
-                    {
-                        case HttpStatusCode.OK:
-                            return true;
-                        case HttpStatusCode.Redirect:
-                            var uriString = response.Headers["Location"];
-                            return StsIsAvailable(uriString);
-                    }
-
-                    response.Close();
-                }
-                return false;
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(120));
+                using var response = HttpClient.Send(request, timeout.Token);
+                return response.StatusCode == HttpStatusCode.OK;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //MessageBox.Show($"Det oppstod en feil når vi sjekker om STSen er tilgjengelig for applikasjonen.{Environment.NewLine}Feilmelding: {e.Message}");
                 return false;
             }
         }

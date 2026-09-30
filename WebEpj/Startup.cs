@@ -2,12 +2,14 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Duende.IdentityModel;
 using HelseId.Common.Clients;
+using HelseId.Common.DPoP;
 using HelseId.Common.Jwt;
 using HelseId.Common.Oidc;
 using HelseId.Common.RequestObjects;
-using IdentityModel;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -20,7 +22,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using WebEpj.DPoP;
 using WebEpj.Extensions;
+using WebEpj.Session;
 
 namespace WebEpj
 {
@@ -37,6 +41,8 @@ namespace WebEpj
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddHealthChecks();
+            services.AddSingleton<IDPoPProofCreator, DPoPProofProvider>();
+            services.AddScoped<ISessionGatewayClient, SessionGatewayClient>();
             services.AddHttpContextAccessor()
                 .Configure<ApplicationOptions>(Configuration)
                 .Configure<AuthenticationOptions>(Configuration.GetSection("Authentication"))
@@ -130,11 +136,13 @@ namespace WebEpj
                                             SigningMethod =
                                                 (JwtGenerator.SigningMethod) Enum.Parse(
                                                     typeof(JwtGenerator.SigningMethod), "2"),
-                                            Flow = IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid,
                                             RedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc"
                                         };
 
-                                        var client = new HelseIdClient(opt);
+                                        var dPoPProofCreator = ctx.HttpContext.RequestServices
+                                            .GetRequiredService<IDPoPProofCreator>();
+                                        var httpClientFactory = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+                                        var client = new HelseIdClient(opt, dPoPProofCreator, httpClientFactory);
                                         var response = await client.AcquireTokenByRefreshToken(refreshToken, false);
 
                                         if (!response.IsError)
@@ -180,6 +188,7 @@ namespace WebEpj
                         options.ResponseMode = OidcConstants.ResponseModes.FormPost;
                         options.RequireHttpsMetadata = false;
                         options.UsePkce = true;
+                        options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Require;
                         
                         var scopes = "";
                         foreach (var item in authenticationOptions.Scopes)
@@ -206,19 +215,20 @@ namespace WebEpj
                                     ? authenticationOptions.EpjVendorId
                                     : authenticationOptions.OrganizationSfmId;
 
-                                var codeVerifier = isMultiTenant
-                                    ? ctx.TokenEndpointRequest.Parameters[OidcConstants.TokenRequest.CodeVerifier]
-                                    : string.Empty;
+                                var codeVerifier =
+                                    ctx.TokenEndpointRequest.Parameters[OidcConstants.TokenRequest.CodeVerifier];
                                 
                                 var opt = new HelseIdClientOptions(clientId: clientId,
                                     authority: authenticationOptions.Endpoint,
                                     redirectUri: $"{ctx.Request.Scheme}://{ctx.Request.Host}/signin-oidc",
                                     postLogoutRedirectUri: authenticationOptions.SignedOutRedirectUri,
                                     signingMethod: (JwtGenerator.SigningMethod) Enum.Parse(typeof(JwtGenerator.SigningMethod), "2"), 
-                                    scope: scopes.TrimEnd(),
-                                    flow: IdentityModel.OidcClient.OidcClientOptions.AuthenticationFlow.Hybrid);
+                                    scope: scopes.TrimEnd());
 
-                                var client = new HelseIdClient(opt);
+                                var dPoPProofCreator = ctx.HttpContext.RequestServices
+                                    .GetRequiredService<IDPoPProofCreator>();
+                                var httpClientFactory = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+                                var client = new HelseIdClient(opt, dPoPProofCreator, httpClientFactory);
 
                                 var result =
                                     await client.AcquireTokenByAuthorizationCodeAsync(
@@ -312,7 +322,7 @@ namespace WebEpj
                                     var token = JwtGenerator.GenerateWithRequestObject(ctx.Options.ClientId,
                                         ctx.Options.Authority, 
                                         ClientAssertion.LoadWebEpjVendorPrivateKey(),
-                                        SecurityAlgorithms.RsaSha512,
+                                        SecurityAlgorithms.RsaSsaPssSha256,
                                         requestObject.Build());
 
                                     ctx.ProtocolMessage.SetParameter("request", token);
@@ -323,12 +333,30 @@ namespace WebEpj
                                     ctx?.ProtocolMessage.Parameters.Remove("client_id");
                                     ctx?.ProtocolMessage.Parameters.Add("client_id", authenticationOptions.OrganizationSfmId);
                                     
-                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge");
-                                    ctx?.ProtocolMessage.Parameters.Remove("code_challenge_method");
                                     ctx?.ProtocolMessage.Parameters.Remove("nonce");
                                 }
 
                                 return Task.CompletedTask;
+                            },
+                            OnPushAuthorization = async ctx =>
+                            {
+                                var isMultiTenant = ctx.HttpContext.Session.Get<bool>("MultiTenantOrganization");
+                                var httpClient = ctx.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
+                                var discovery = await OidcDiscoveryHelper.GetDiscoveryDocument(ctx.Options.Authority, httpClient);
+
+                                if (discovery.IsError)
+                                {
+                                    throw new ApplicationException(discovery.Error);
+                                }
+
+                                var clientAssertion = ClientAssertion.CreateWithRsaKeys(
+                                    ctx.Options.ClientId,
+                                    discovery.Issuer,
+                                    isMultiTenant);
+
+                                ctx.ProtocolMessage.ClientAssertionType = clientAssertion.client_assertion_type;
+                                ctx.ProtocolMessage.ClientAssertion = clientAssertion.client_assertion;
+                                ctx.HandleClientAuthentication();
                             }
                         };
                     }).Services
